@@ -1,8 +1,8 @@
 {
   "name": "オセロ暗記トレーナー",
   "short_name": "暗記トレーナー",
-  "start_url": "./オセロ暗記ツールv17_PWA.html",
-  "scope": "./",
+  "start_url": "./",
+"scope": "./",
   "display": "standalone",
   "background_color": "#0B8F2F",
   "theme_color": "#0B8F2F",
