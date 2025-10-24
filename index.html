@@ -156,7 +156,7 @@
 </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>オセロ暗記トレーナー v17 Clean（重複統合・コーチ無効化）</title>
+<title>オセロ暗記トレーナー v20_20251024 Clean（重複統合・コーチ無効化）</title>
 <style>
   :root { --cell: 56px; --gap: 2px; --left-col: 360px; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "YuGothic", Meiryo, sans-serif; margin: 20px; }
@@ -1953,7 +1953,7 @@ function stepIfAIShouldPlay(startPhase=false){
   checkFinishIfNeeded();
 }
 function onCellClick(e){
-  if(inspectMode) return;  // v17-fix: disable click during 確認中
+  if(inspectMode) return;  // v20_20251024-fix: disable click during 確認中
   const cell=this;
   if(boardWrap.classList.contains('legal-only') && !cell.classList.contains('legal')){ return; }
   const r=parseInt(cell.dataset.r,10); const c=parseInt(cell.dataset.c,10); const coord=cell.dataset.coord;
@@ -5826,7 +5826,7 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
 
 })(); // end v16
 </script>
-<!-- ===== v17 Addon: その他機能の表示/非表示トグル（2025-10-19） ===== -->
+<!-- ===== v20_20251024 Addon: その他機能の表示/非表示トグル（2025-10-19） ===== -->
 <style>
   /* 「その他機能一覧」用のラッパ。初期は非表示 */
   .more-wrap { display: none; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -5925,8 +5925,8 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
   }catch(e){ console.warn('more toggle init failed:', e); }
 })();
 </script>
-<!-- ===== /v17 Addon ===== -->
-<!-- ===== v17 Patch by ChatGPT (全体マージ・インポート + コーチ機能の廃止) ===== -->
+<!-- ===== /v20_20251024 Addon ===== -->
+<!-- ===== v20_20251024 Patch by ChatGPT (全体マージ・インポート + コーチ機能の廃止) ===== -->
 <script>
 (function(){
   // ========= disable Coach features visually and functionally =========
@@ -6147,7 +6147,7 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
 
   // ========= bump title =========
   try{
-    document.title = (document.title||'').replace(/v(\d+)/, 'v17') || 'オセロ暗記トレーナー v17';
+    document.title = (document.title||'').replace(/v(\d+)/, 'v20_20251024') || 'オセロ暗記トレーナー v20_20251024';
     // [refactor] removed version bump
   }catch(_){}
 })();
@@ -6206,13 +6206,13 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
   }, 400);
 })();
 </script>
-<!-- ===== v17 Fixes by ChatGPT (2025-10-20) ===== -->
+<!-- ===== v20_20251024 Fixes by ChatGPT (2025-10-20) ===== -->
 <script>
-// v17-1: 「暗記成功！」画面を最小構成にクリーンアップ（PNGに載っている情報のみ表示）
-// v17-2: 「盤面リセット」→「トレーニング開始」で直前の問題を再スタート
+// v20_20251024-1: 「暗記成功！」画面を最小構成にクリーンアップ（PNGに載っている情報のみ表示）
+// v20_20251024-2: 「盤面リセット」→「トレーニング開始」で直前の問題を再スタート
 
 (function(){
-  // --- v17-1: Clean up success modal ---
+  // --- v20_20251024-1: Clean up success modal ---
   function cleanResultInfoMinimal(){
     try{
       var box = document.getElementById('resultInfo');
@@ -6231,26 +6231,26 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
       });
     }catch(e){ /* ignore */ }
   }
-  if (typeof window.showCelebrate === 'function' && !window._v17_minimalCelebratePatched){
+  if (typeof window.showCelebrate === 'function' && !window._v20_20251024_minimalCelebratePatched){
     var _origShowCelebrate = window.showCelebrate;
     window.showCelebrate = function(total, mistakes){
       var out = _origShowCelebrate(total, mistakes);
       try{ cleanResultInfoMinimal(); }catch(_){}
       return out;
     };
-    window._v17_minimalCelebratePatched = true;
+    window._v20_20251024_minimalCelebratePatched = true;
   }
 
-  // --- v17-2: Reset keeps current problem; Start resumes same id ---
+  // --- v20_20251024-2: Reset keeps current problem; Start resumes same id ---
   (function(){
     var reset = document.getElementById('resetBtn');
     var start = document.getElementById('startBtn');
     if(!reset || !start) return;
-    window._v17_resumeAfterReset = false;
+    window._v20_20251024_resumeAfterReset = false;
 
     // Reset: 盤面だけ初期化し、同一問題を再開フラグを立てる
     reset.addEventListener('click', function(){
-      window._v17_resumeAfterReset = true;
+      window._v20_20251024_resumeAfterReset = true;
       // ラベルが消えないように、リセット直後に番号ラベルを再描画
       setTimeout(function(){ try{ if (typeof updateBoardIndexLabel==='function') updateBoardIndexLabel(); }catch(_){} }, 0);
     }, {capture:true});
@@ -6258,9 +6258,9 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
     // Start: フラグが立っていれば直前の currentKifuId を再スタート
     start.addEventListener('click', function(e){
       try{
-        if(window._v17_resumeAfterReset && typeof startTrainingWithKifuId==='function' && typeof currentKifuId!=='undefined' && currentKifuId){
+        if(window._v20_20251024_resumeAfterReset && typeof startTrainingWithKifuId==='function' && typeof currentKifuId!=='undefined' && currentKifuId){
           e.stopImmediatePropagation(); // 既存の startTraining() ハンドラをキャンセル
-          window._v17_resumeAfterReset = false;
+          window._v20_20251024_resumeAfterReset = false;
           try{
             startTrainingWithKifuId(currentKifuId);
           }catch(ex){
@@ -6273,7 +6273,7 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
   })();
 })();
 </script>
-<!-- v17 note-bar patch (備考を座標行の直下に常時表示／トレ中のみ) -->
+<!-- v20_20251024 note-bar patch (備考を座標行の直下に常時表示／トレ中のみ) -->
 <style>
   .note-bar{ margin-top:6px; padding:8px 10px; background:#fffdfa; border:1px solid #f1e3c7; border-radius:8px; font-size:0.92rem; }
   body.theme-dark .note-bar{ background:#2a2418; border-color:#4a3f24; }
@@ -6340,7 +6340,7 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
   document.addEventListener('DOMContentLoaded', function(){ setTimeout(updateLiveNote, 60); });
 })();
 </script>
-<!-- ===== v17 Maintainability Layer (2025-10-23) ===== -->
+<!-- ===== v20_20251024 Maintainability Layer (2025-10-23) ===== -->
 <script>
 ;(()=>{'use strict';
 /**
@@ -6469,7 +6469,7 @@ RT.registerAction('exportStatsBtn', function(){
 });
 
 /** Finalize */
-onReady(()=> RT.bumpTitle('v17') );
+onReady(()=> RT.bumpTitle('v20_20251024') );
 })();
 </script>
 <script>
@@ -6481,8 +6481,8 @@ onReady(()=> RT.bumpTitle('v17') );
   }catch(_){}
 
   // Defensive: update "覚えた棋譜（ユニーク）" by sig after counts update (idempotent)
-  if(!window._v17_unique_sig_patch){
-    function _v17_updateUniqueBySig(){
+  if(!window._v20_20251024_unique_sig_patch){
+    function _v20_20251024_updateUniqueBySig(){
       try{
         var set = new Set();
         var byPath = (window.store && window.store.kifuByPath) ? window.store.kifuByPath : {};
@@ -6496,16 +6496,16 @@ onReady(()=> RT.bumpTitle('v17') );
     }
     if(typeof window.updateCountsAndPath === 'function'){
       var orig = window.updateCountsAndPath;
-      window.updateCountsAndPath = function(){ orig(); _v17_updateUniqueBySig(); };
+      window.updateCountsAndPath = function(){ orig(); _v20_20251024_updateUniqueBySig(); };
     }else{
-      document.addEventListener('DOMContentLoaded', _v17_updateUniqueBySig, { once: true });
-      setTimeout(_v17_updateUniqueBySig, 500);
+      document.addEventListener('DOMContentLoaded', _v20_20251024_updateUniqueBySig, { once: true });
+      setTimeout(_v20_20251024_updateUniqueBySig, 500);
     }
-    window._v17_unique_sig_patch = true;
+    window._v20_20251024_unique_sig_patch = true;
   }
 
   // Safer localStorage access (fallback to in-memory store if blocked)
-  if(!window._v17_safe_ls){
+  if(!window._v20_20251024_safe_ls){
     (function(){
       try{
         var k='__ls_test__'; localStorage.setItem(k,'1'); localStorage.removeItem(k);
@@ -6519,7 +6519,7 @@ onReady(()=> RT.bumpTitle('v17') );
         };
       }
     })();
-    window._v17_safe_ls = true;
+    window._v20_20251024_safe_ls = true;
   }
 })();
 </script>
