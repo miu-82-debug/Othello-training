@@ -1,9 +1,162 @@
 <!DOCTYPE html>
+
+<!-- Maintained version: duplicate helper functions consolidated (el, getLogs). No functional changes. Generated on 2025-10-23 by ChatGPT. -->
 <html lang="ja">
 <head>
+<!-- Quota-safe localStorage shim (compression + graceful fallback).
+     Inserts LZW compression and in-memory fallback to avoid QuotaExceededError.
+     MIT License (shim code by ChatGPT; LZW algorithm adapted to JS from public-domain references). -->
+<script>
+(function(){
+  // --- Minimal LZW encoder/decoder (sync) ---
+  function lzw_encode(s){
+    if (s == null) return s;
+    var dict = Object.create(null);
+    var data = (s + "").split("");
+    var out = [];
+    var phrase = data[0];
+    var currChar;
+    var code = 256;
+    for (var i = 1; i < data.length; i++) {
+      currChar = data[i];
+      var combo = phrase + currChar;
+      if (dict[combo] != null) {
+        phrase = combo;
+      } else {
+        out.push(phrase.length > 1 ? dict[phrase] : phrase.charCodeAt(0));
+        dict[combo] = code;
+        code++;
+        phrase = currChar;
+      }
+    }
+    out.push(phrase.length > 1 ? dict[phrase] : phrase.charCodeAt(0));
+    for (var i = 0; i < out.length; i++) {
+      out[i] = String.fromCharCode(out[i]);
+    }
+    return out.join("");
+  }
+  function lzw_decode(s){
+    if (s == null) return s;
+    var dict = Object.create(null);
+    var data = (s + "").split("");
+    var currChar = data[0];
+    var oldPhrase = currChar;
+    var out = [currChar];
+    var code = 256;
+    var phrase;
+    for (var i = 1; i < data.length; i++) {
+      var currCode = data[i].charCodeAt(0);
+      if (currCode < 256) {
+        phrase = data[i];
+      } else {
+        phrase = dict[currCode] ? dict[currCode] : (oldPhrase + currChar);
+      }
+      out.push(phrase);
+      currChar = phrase.charAt(0);
+      dict[code] = oldPhrase + currChar;
+      code++;
+      oldPhrase = phrase;
+    }
+    return out.join("");
+  }
+
+  function compressIfHelpful(str) {
+    try {
+      if (typeof str !== "string") str = String(str);
+      if (str.length < 2048) return {v: str, compressed: false}; // small: skip
+      var c = lzw_encode(str);
+      if (c.length < str.length) {
+        return {v: "LZW:" + c, compressed: true};
+      } else {
+        return {v: str, compressed: false};
+      }
+    } catch (e) {
+      return {v: str, compressed: false};
+    }
+  }
+  function maybeDecompress(str) {
+    if (typeof str !== "string") return str;
+    if (str.startsWith("LZW:")) {
+      try {
+        return lzw_decode(str.slice(4));
+      } catch(e) {
+        console.warn("[quota-shim] Decompression failed:", e);
+        return null;
+      }
+    }
+    return str;
+  }
+
+  var rawSet = Storage.prototype.setItem;
+  var rawGet = Storage.prototype.getItem;
+  var rawRemove = Storage.prototype.removeItem;
+  var inMemory = new Map();
+  var warned = false;
+
+  function showQuotaWarningOnce() {
+    if (warned) return;
+    warned = true;
+    try {
+      alert("保存データが大きすぎるため、ブラウザの保存容量を超えました。\\n"
+          + "・可能な限りデータは圧縮保存しました。\\n"
+          + "・なお、それでも保存できない分は『一時保存（このタブを閉じると消えます）』に切り替えています。\\n"
+          + "・不要なセーブデータを削除するか、エクスポート機能をご利用ください。");
+    } catch(_) {}
+    console.warn("[quota-shim] Quota exceeded. Using in-memory fallback for this session.");
+  }
+
+  Storage.prototype.setItem = function(key, value){
+    // Attempt compressed write first (if helpful), then plain as fallback.
+    var candidate = compressIfHelpful(value);
+    try {
+      rawSet.call(this, key, candidate.v);
+      return;
+    } catch (e1) {
+      // If compressed attempt failed with quota, try plain (or vice versa)
+      try {
+        if (candidate.compressed) {
+          rawSet.call(this, key, String(value));
+          return;
+        } else {
+          var c2 = "LZW:" + lzw_encode(String(value));
+          rawSet.call(this, key, c2);
+          return;
+        }
+      } catch (e2) {
+        // Quota exceeded even after attempts -> in-memory fallback
+        if (e2 && (e2.name === "QuotaExceededError" || e2.code === 22 || e2.code === 1014)) {
+          inMemory.set(key, String(value));
+          showQuotaWarningOnce();
+          return;
+        }
+        // Unknown error: rethrow
+        throw e2;
+      }
+    }
+  };
+
+  Storage.prototype.getItem = function(key){
+    var v = rawGet.call(this, key);
+    if (v != null) {
+      var dec = maybeDecompress(v);
+      if (dec != null) return dec;
+    }
+    if (inMemory.has(key)) return inMemory.get(key);
+    return null;
+  };
+
+  Storage.prototype.removeItem = function(key){
+    try { rawRemove.call(this, key); } catch(_) {}
+    if (inMemory.has(key)) inMemory.delete(key);
+  };
+
+  // Keep a small, visible marker to help users see the patch is active (optional, non-fatal).
+  try { if (!rawGet.call(localStorage, "__quota_shim")) rawSet.call(localStorage, "__quota_shim", "1"); } catch(_) {}
+})();
+</script>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>オセロ暗記トレーナー v7（大/小フォルダ・コメント・検索・自打ち両側・持色UI修正）</title>
+<title>オセロ暗記トレーナー v17 Clean（重複統合・コーチ無効化）</title>
 <style>
   :root { --cell: 56px; --gap: 2px; --left-col: 360px; }
   body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "YuGothic", Meiryo, sans-serif; margin: 20px; }
@@ -187,263 +340,311 @@
     .panel.rightDock { grid-template-columns: 1fr; }
     .rightDock .dockGrid { grid-template-columns: 1fr; }
   }
+<!-- v21 Calendar readability upgrade -->
+<style id="v21-calendar-css">
+  :root { --cal-size: 20px; --cal-gap: 5px; }
+  .cal-modal .window { width: min(720px, 92vw); }
+
+  .cal-wrap { display: grid; gap: 8px; }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: max-content repeat(7, var(--cal-size));
+    align-items: center;
+    gap: var(--cal-gap);
+    font-size: 12px;
+  }
+
+  .cal-week    { color:#6b7280; font-variant-numeric: tabular-nums; text-align:right; padding-right:6px; }
+  .cal-weekday { text-align:center; opacity:.75; font-size:11px; }
+
+  .cal-cell {
+    width: var(--cal-size); height: var(--cal-size);
+    border-radius: 4px; position: relative;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
+  }
+  body.theme-dark .cal-week  { color:#9aa1ad; }
+  body.theme-dark .cal-cell  { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+
+  .cal-cell.future { opacity:.35; }
+  .cal-cell.today  { outline: 2px solid #10b981; outline-offset: 1px; }
+  .cal-cell .freeze-dot{
+    position:absolute; left:2px; top:2px; width:6px; height:6px; border-radius:50%;
+    background:#38bdf8; box-shadow:0 0 0 1px rgba(0,0,0,.3);
+  }
+
+  .cal-month { grid-column: 1 / span 8; margin-top: 6px; font-weight: 600; opacity:.85; }
+
+  /* 既存凡例を少し見やすく */
+  .cal-legend { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; }
+  .cal-legend .cal-cell { margin-right:2px; }
 </style>
 
 <style>
 /* ===== v9 addons: heatmap overlay ===== */
 .cell .heat{
   position:absolute; inset:0; border-radius:6px; pointer-events:none; display:none;
+  z-index: 4;
 }
+
 .cell .heat .cnt{
   position:absolute; right:4px; bottom:4px; font-size:11px; color:#fff;
   text-shadow:0 1px 2px rgba(0,0,0,0.7);
+  z-index: 5;
 }
-.board-wrap.heat-on .cell .heat{ display:block; }
+
+.board-wrap.heat-on .cell .heat{ display:block;
+  z-index: 4;
+}
+
 </style>
-
-  <meta name="theme-color" content="#0B8F2F">
-  <link rel="manifest" href="manifest.webmanifest?v=20251020">
-</head>
-<body>
+<style>
+/* === Coach feature removed (UI hidden) === */
+#coachSel, #coachRow, #coachOverlay, #coachBtn, .coach-btn, .coach-select, .coach-overlay { display: none !important; }
+</style>
+<!-- ===== v20 Patch: keyboard overlay position (board-left-bottom) & robust buttons ===== -->
+<style id="v20-kbd-pos-css">
+/* Always anchor the keyboard input overlay to the board's lower-left (not the viewport) */
+.kbd-overlay{
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 7;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+  display: none;
+  pointer-events: none; /* overlay should never block clicks */
+}
+</style>
+<meta content="オセロ/リバーシの手筋・棋譜を効率よく暗記するためのトレーナー。フォルダ管理、SRS、カレンダー凍結、ショートカット対応。" name="description"/><meta content="#1B5E20" name="theme-color"/><link href="manifest.webmanifest" rel="manifest"/><link href="icon_othello_green-192.png" rel="icon" sizes="192x192" type="image/png"/><link href="icon_othello_green-512.png" rel="icon" sizes="512x512" type="image/png"/><link href="icon_othello_green-192.png" rel="apple-touch-icon"/></head>
+<body><noscript>このアプリはJavaScriptが必要です。ブラウザの設定でJavaScriptを有効にしてください。</noscript>
 <div class="topbar">
-  <h1>オセロ暗記トレーナー v7</h1>
-  <span class="stat">覚えた棋譜（ユニーク）：<b id="uniqueSolved">0</b></span>
+<h1>オセロ暗記トレーナー v7</h1>
+<span class="stat">覚えた棋譜（ユニーク）：<b id="uniqueSolved">0</b></span>
 </div>
-
 <div class="grid">
-  <div class="panel">
-    <div class="card">
-      <h2>① 大/小フォルダと棋譜入出力</h2>
-
-      <div class="field">
-        <div class="row wrap">
-          <label>大フォルダ：</label>
-          <select id="bigFolderSelect"></select>
-          <button class="warn" id="deleteBigFolderBtn">大フォルダ削除</button>
-        </div>
-
-        <div class="row wrap">
-          <input id="newBigFolderName" placeholder="新規大フォルダ名（例：虎大量）" type="text"/>
-          <div aria-label="持色（任意）" class="row" id="newBigFolderColorGroup" role="group" style="gap:10px;">
-            <label class="small"><input checked name="newBigColor" type="radio" value=""/> 指定なし</label>
-            <label class="small"><input name="newBigColor" type="radio" value="BLACK"/> 黒</label>
-            <label class="small"><input name="newBigColor" type="radio" value="WHITE"/> 白</label>
-          </div>
-          <button id="addBigFolderBtn">作成</button>
-        </div>
-
-        <div class="row wrap">
-          <button class="ghost tiny" id="toggleBigReorderBtn">大フォルダを並べ替える</button>
-        </div>
-        <div class="row wrap">
-          <div aria-label="大フォルダの順序（ドラッグで並び替え）" class="reorder-list" id="bigReorderList" style="display:none;"></div>
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="row wrap">
-          <label>小フォルダ：</label>
-          <select id="smallFolderSelect"></select>
-          <button class="warn" id="deleteSmallFolderBtn">小フォルダ削除</button>
-        </div>
-        <div class="row wrap">
-          <input id="newSmallFolderName" placeholder="新規小フォルダ名（例：FJT）" type="text"/>
-          <button id="addSmallFolderBtn">作成</button>
-        </div>
-        <div class="row wrap">
-          <button class="ghost tiny" id="toggleSmallReorderBtn">小フォルダを並べ替える</button>
-        </div>
-        <div class="row wrap">
-          <div aria-label="小フォルダの順序（ドラッグで並び替え）" class="reorder-list" id="smallReorderList" style="display:none;"></div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>棋譜入力（1行=1棋譜／複数行ペーストOK）</label>
-        <textarea class="mono" id="kifuInput" placeholder="例：
+<div class="panel">
+<div class="card">
+<h2>① 大/小フォルダと棋譜入出力</h2>
+<div class="field">
+<div class="row wrap">
+<label>大フォルダ：</label>
+<select id="bigFolderSelect"></select>
+<button class="warn" id="deleteBigFolderBtn">大フォルダ削除</button>
+</div>
+<div class="row wrap">
+<input id="newBigFolderName" placeholder="新規大フォルダ名（例：虎大量）" type="text"/>
+<div aria-label="持色（任意）" class="row" id="newBigFolderColorGroup" role="group" style="gap:10px;">
+<label class="small"><input checked="" name="newBigColor" type="radio" value=""/> 指定なし</label>
+<label class="small"><input name="newBigColor" type="radio" value="BLACK"/> 黒</label>
+<label class="small"><input name="newBigColor" type="radio" value="WHITE"/> 白</label>
+</div>
+<button id="addBigFolderBtn">作成</button>
+</div>
+<div class="row wrap">
+<button class="ghost tiny" id="toggleBigReorderBtn">大フォルダを並べ替える</button>
+</div>
+<div class="row wrap">
+<div aria-label="大フォルダの順序（ドラッグで並び替え）" class="reorder-list" id="bigReorderList" style="display:none;"></div>
+</div>
+</div>
+<div class="field">
+<div class="row wrap">
+<label>小フォルダ：</label>
+<select id="smallFolderSelect"></select>
+<button class="warn" id="deleteSmallFolderBtn">小フォルダ削除</button>
+</div>
+<div class="row wrap">
+<input id="newSmallFolderName" placeholder="新規小フォルダ名（例：FJT）" type="text"/>
+<button id="addSmallFolderBtn">作成</button>
+</div>
+<div class="row wrap">
+<button class="ghost tiny" id="toggleSmallReorderBtn">小フォルダを並べ替える</button>
+</div>
+<div class="row wrap">
+<div aria-label="小フォルダの順序（ドラッグで並び替え）" class="reorder-list" id="smallReorderList" style="display:none;"></div>
+</div>
+</div>
+<div class="field">
+<label>棋譜入力（1行=1棋譜／複数行ペーストOK）</label>
+<textarea class="mono" id="kifuInput" placeholder="例：
 f5d6c3d3c4f4c5b3...（区切りなし・大/小文字どちらでも可）
 または F5 D6 C3 ... / F5,D6,C3 ...（空白/カンマ区切り）
 PASSは P または PASS。"></textarea>
-        <div class="row wrap">
-          <button id="addKifuBtn">棋譜を追加</button>
-          <button class="ghost" id="clearKifuInputBtn">入力クリア</button>
-        </div>
-        <div class="small">※ 追加時に重複棋譜は自動スキップ（暗黙パスも考慮して判定）。</div>
-      </div>
-
-      <div class="field row wrap">
-        <button class="ghost" id="openListBtn">棋譜一覧を開く</button>
-      </div>
-
-      <div class="field row wrap">
-        <button class="ghost" id="exportBtn">エクスポート（JSON）</button>
-        <input accept="application/json" id="importFile" style="display:none;" type="file"/>
-        <button class="ghost" id="importBtn">インポート</button>
-        <button class="warn" id="initAllBtn">初期化（全データ消去）</button>
-      </div>
-      <div class="small muted">※ 初期化はローカルに保存された全データ（大/小フォルダ・棋譜・キュー・統計）を削除し、インポート前の初期状態に戻します。</div>
-      <div class="small muted">Excel（XLSX/XLSM）からの取り込みは、事前に同梱の「Excel→JSON 変換ツール」で JSON にしてから本ボタンで取り込むのが確実です。</div>
-    </div>
-  </div>
-
-  <div class="panel rightDock">
-    <div class="card">
-      <div class="board-wrap" id="boardWrap">
-        <div class="inspect-bar" id="inspectBar">確認中</div>
-        <div class="inspect-action" id="inspectAction"><button id="resumeBtn">暗記再開</button></div>
-        <div aria-label="問題番号" class="corner-label" id="boardIndexLabel"></div>
-        <div class="celebrate" id="celebrate">
-          <div class="content">
-            <div class="title">暗記成功！</div>
-            <div class="small muted" id="celebrateMsg"></div>
-            <div class="result-box" id="resultInfo">
-              <div class="small muted">問題番号：<span id="resultIndex">—</span></div>
-              <div class="field">
-                <label class="small">棋譜</label>
-                <textarea class="kifu-text" id="resultKifuText" readonly rows="2"></textarea>
-                <div class="row">
-                  <button class="ghost" id="resultCopyBtn">コピー</button>
-                  <span class="small muted" id="resultLen"></span>
-                </div>
-              </div>
-              <div class="field">
-                <label class="small">コメント</label>
-                <textarea class="kifu-text note-text" id="resultCommentInput" placeholder="メモや気づき、対策などを自由に" rows="3"></textarea>
-              </div>
-            </div>
-            <div class="actions">
-              <button class="primary" id="repeatBtn">今の棋譜をもう一度トレーニング</button>
-              <button id="nextBtn">次の問題に進む</button>
-            </div>
-          </div>
-        </div>
-        <div class="axis top" id="topAxis"></div>
-        <div class="axis left" id="leftAxis"></div>
-        <div aria-label="オセロ盤（A-H/1-8）" class="board" id="board"></div>
-        <div class="axis right" id="rightAxis"></div>
-        <div class="axis bottom" id="bottomAxis"></div>
-      </div>
-      <div class="row-just">
-        <div class="small">座標：左→右 A–H、上→下 1–8（左上=A1）</div>
-      </div>
-    </div>
-
-    <div class="dockGrid">
-      <div class="card">
-        <h2>② トレーニング設定</h2>
-        <div class="field row">
-          <label>自分の色：</label>
-          <label><input checked name="myColor" type="radio" value="BLACK"/> 黒（先手）</label>
-          <label><input name="myColor" type="radio" value="WHITE"/> 白（後手）</label>
-        </div>
-        <div class="field row wrap">
-          <label>出題モード：</label>
-          <select id="pickMode">
-            <option selected value="RANDOM">ランダム（出題オンのみ）</option>
-            <option value="NUMBER">番号指定（表示順）</option>
-            <option value="NUMBER_ENABLED">番号指定（出題オンに限定）</option>
-            <option value="QUEUE">キュー順（この小フォルダ）</option>
-            <option value="HARD">誤答が多い順（出題オンのみ）</option>
-            <option value="UNSOLVED">未クリアのみ（出題オンのみ）</option>
-          </select>
-          <input id="kifuNumberInput" min="1" placeholder="番号（1〜）" title="番号指定時のみ使用" type="number"/>
-        </div>
-        <div class="field row wrap">
-          <label for="startIndexInput">Start index（開始手）：</label>
-          <input id="startIndexInput" max="60" min="1" placeholder="例：30" type="number"/>
-          <label for="endIndexInput">End index（終了手）：</label>
-          <input id="endIndexInput" max="60" min="1" placeholder="例：60" type="number"/>
-        </div>
-        <div class="field row wrap">
-          <label><input id="toggleHint" type="checkbox"/> 期待手をハイライト</label>
-          <label><input id="toggleMiniCoord" type="checkbox"/> マス内に座標表示</label>
-          <label><input checked id="toggleSound" type="checkbox"/> 効果音</label>
-        </div>
-        <div class="field row wrap">
-          <label><input id="toggleSelfBoth" type="checkbox"/> 両方を自分で打つ（AIは打たない）</label>
-          <span class="small muted">※オンの間は「自分の色」は無視されます。</span>
-        </div>
-        <div class="row wrap">
-          <button class="primary" id="startBtn">トレーニング開始</button>
-          <button id="resetBtn">盤面リセット</button>
-        </div>
-        <div class="status" id="status">大/小フォルダを選び、棋譜を登録して開始してください。</div>
-        <div class="small">
+<div class="row wrap">
+<button id="addKifuBtn">棋譜を追加</button>
+<button class="ghost" id="clearKifuInputBtn">入力クリア</button>
+</div>
+<div class="small">※ 追加時に重複棋譜は自動スキップ（暗黙パスも考慮して判定）。</div>
+</div>
+<div class="field row wrap">
+<button class="ghost" id="openListBtn">棋譜一覧を開く</button>
+</div>
+<div class="field row wrap">
+<button class="ghost" id="exportBtn">エクスポート（JSON）</button>
+<input accept="application/json" id="importFile" style="display:none;" type="file"/>
+<button class="ghost" id="importBtn">インポート</button>
+<button class="warn" id="initAllBtn">初期化（全データ消去）</button>
+</div>
+<div class="small muted">※ 初期化はローカルに保存された全データ（大/小フォルダ・棋譜・キュー・統計）を削除し、インポート前の初期状態に戻します。</div>
+<div class="small muted">Excel（XLSX/XLSM）からの取り込みは、事前に同梱の「Excel→JSON 変換ツール」で JSON にしてから本ボタンで取り込むのが確実です。</div>
+</div>
+</div>
+<div class="panel rightDock">
+<div class="card">
+<div class="board-wrap" id="boardWrap">
+<div class="inspect-bar" id="inspectBar">確認中</div>
+<div class="inspect-action" id="inspectAction"><button id="resumeBtn">暗記再開</button></div>
+<div aria-label="問題番号" class="corner-label" id="boardIndexLabel"></div>
+<div class="celebrate" id="celebrate">
+<div class="content">
+<div class="title">暗記成功！</div>
+<div class="small muted" id="celebrateMsg"></div>
+<div class="result-box" id="resultInfo">
+<div class="small muted">問題番号：<span id="resultIndex">—</span></div>
+<div class="field">
+<label class="small">棋譜</label>
+<textarea class="kifu-text" id="resultKifuText" readonly="" rows="2"></textarea>
+<div class="row">
+<button class="ghost" id="resultCopyBtn">コピー</button>
+<span class="small muted" id="resultLen"></span>
+</div>
+</div>
+<div class="field">
+<label class="small">コメント</label>
+<textarea class="kifu-text note-text" id="resultCommentInput" placeholder="メモや気づき、対策などを自由に" rows="3"></textarea>
+</div>
+</div>
+<div class="actions">
+<button class="primary" id="repeatBtn">今の棋譜をもう一度トレーニング</button>
+<button id="nextBtn">次の問題に進む</button>
+</div>
+</div>
+</div>
+<div class="axis top" id="topAxis"></div>
+<div class="axis left" id="leftAxis"></div>
+<div aria-label="オセロ盤（A-H/1-8）" class="board" id="board"></div>
+<div class="axis right" id="rightAxis"></div>
+<div class="axis bottom" id="bottomAxis"></div>
+</div>
+<div class="row-just">
+<div class="small">座標：左→右 A–H、上→下 1–8（左上=A1）</div>
+</div>
+</div>
+<div class="dockGrid">
+<div class="card">
+<h2>② トレーニング設定</h2>
+<div class="field row">
+<label>自分の色：</label>
+<label><input checked="" name="myColor" type="radio" value="BLACK"/> 黒（先手）</label>
+<label><input name="myColor" type="radio" value="WHITE"/> 白（後手）</label>
+</div>
+<div class="field row wrap">
+<label>出題モード：</label>
+<select id="pickMode">
+<option selected="" value="RANDOM">ランダム（出題オンのみ）</option>
+<option value="NUMBER">番号指定（表示順）</option>
+<option value="NUMBER_ENABLED">番号指定（出題オンに限定）</option>
+<option value="QUEUE">キュー順（この小フォルダ）</option>
+<option value="HARD">誤答が多い順（出題オンのみ）</option>
+<option value="UNSOLVED">未クリアのみ（出題オンのみ）</option>
+</select>
+<input id="kifuNumberInput" min="1" placeholder="番号（1〜）" title="番号指定時のみ使用" type="number"/>
+</div>
+<div class="field row wrap">
+<label for="startIndexInput">Start index（開始手）：</label>
+<input id="startIndexInput" max="60" min="1" placeholder="例：30" type="number"/>
+<label for="endIndexInput">End index（終了手）：</label>
+<input id="endIndexInput" max="60" min="1" placeholder="例：60" type="number"/>
+</div>
+<div class="field row wrap">
+<label><input id="toggleHint" type="checkbox"/> 期待手をハイライト</label>
+<label><input id="toggleMiniCoord" type="checkbox"/> マス内に座標表示</label>
+<label><input checked="" id="toggleSound" type="checkbox"/> 効果音</label>
+</div>
+<div class="field row wrap">
+<label><input id="toggleSelfBoth" type="checkbox"/> 両方を自分で打つ（AIは打たない）</label>
+<span class="small muted">※オンの間は「自分の色」は無視されます。</span>
+</div>
+<div class="row wrap">
+<button class="primary" id="startBtn">トレーニング開始</button>
+<button id="resetBtn">盤面リセット</button>
+</div>
+<div class="status" id="status">大/小フォルダを選び、棋譜を登録して開始してください。</div>
+<div class="small">
           範囲進行：<span id="progress">0 / 0</span> 手 |
           現在：<span id="pathView">—</span> |
           出題オン：<span id="enabledCount">0</span>件 |
           キュー：<span id="queueCount">0</span>件 |
           誤答：<span id="mistakesNow">0</span>回
         </div>
-      </div>
-
-      <div class="card">
-        <h2>③ キュー &amp; クリアリスト</h2>
-        <div class="field">
-          <div class="row wrap">
-            <button class="ghost" id="clearQueueBtn">キューをクリア（この小フォルダ）</button>
-            <button class="ghost" id="peekQueueBtn">キュー先頭を確認</button>
-          </div>
-          <div class="small" id="queueView" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-        </div>
-        <div class="field">
-          <div><b>クリアリスト（この小フォルダ）</b></div>
-          <div class="small" id="solvedList"></div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
-
+<div class="card">
+<h2>③ キュー &amp; クリアリスト</h2>
+<div class="field">
+<div class="row wrap">
+<button class="ghost" id="clearQueueBtn">キューをクリア（この小フォルダ）</button>
+<button class="ghost" id="peekQueueBtn">キュー先頭を確認</button>
+</div>
+<div class="small" id="queueView" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+</div>
+<div class="field">
+<div><b>クリアリスト（この小フォルダ）</b></div>
+<div class="small" id="solvedList"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
 <!-- Modal (棋譜一覧 兼 編集・検索) -->
 <div class="modal" id="kifuModal">
-  <div class="window">
-    <header>
-      <h3>棋譜一覧（<span id="modalPathName">—</span>）</h3>
-      <div class="klist-controls">
-        <label>並び替え：</label>
-        <select id="sortBy">
-          <option value="INDEX" selected>表示順（追加順）</option>
-          <option value="NAME">名前</option>
-          <option value="LEN">手数</option>
-          <option value="SOLVED">クリア回数</option>
-          <option value="MISTAKES">誤答回数</option>
-        </select>
-        <select id="sortDir">
-          <option value="ASC" selected>昇順</option>
-          <option value="DESC">降順</option>
-        </select>
-        <input id="searchInput" placeholder="棋譜／備考／名前で検索（空白区切りAND）" style="min-width:280px;" type="text"/>
-        <button class="ghost" id="clearSearchBtn">初期設定</button>
-      </div>
-      <div class="rename-controls">
-        <div class="row wrap" id="renameBigRow">
-          <label>大フォルダ名：</label>
-          <input id="renameBigInput" type="text" placeholder="大フォルダ名を編集"/>
-          <button class="ghost" id="renameBigSaveBtn">保存</button>
-        </div>
-        <div class="row wrap" id="renameSmallRow">
-          <label>小フォルダ名：</label>
-          <input id="renameSmallInput" type="text" placeholder="小フォルダ名を編集"/>
-          <button class="ghost" id="renameSmallSaveBtn">保存</button>
-        </div>
-      </div>
-      <button class="ghost" id="closeModalBtn">閉じる</button>
-    </header>
-    <div class="body">
-      <div class="field" id="kifuList"></div>
-    </div>
-    <div class="footer">
-      <div class="small">出題オン：<span id="enabledCountModal">0</span>件</div>
-      <div class="row">
-        <button class="ghost" id="clearStatsBtn">統計をリセット（この小フォルダ）</button>
-      </div>
-    </div>
-  </div>
+<div class="window">
+<header>
+<h3>棋譜一覧（<span id="modalPathName">—</span>）</h3>
+<div class="klist-controls">
+<label>並び替え：</label>
+<select id="sortBy">
+<option selected="" value="INDEX">表示順（追加順）</option>
+<option value="NAME">名前</option>
+<option value="LEN">手数</option>
+<option value="SOLVED">クリア回数</option>
+<option value="MISTAKES">誤答回数</option>
+</select>
+<select id="sortDir">
+<option selected="" value="ASC">昇順</option>
+<option value="DESC">降順</option>
+</select>
+<input id="searchInput" placeholder="棋譜／備考／名前で検索（空白区切りAND）" style="min-width:280px;" type="text"/>
+<button class="ghost" id="clearSearchBtn">初期設定</button>
 </div>
-
+<div class="rename-controls">
+<div class="row wrap" id="renameBigRow">
+<label>大フォルダ名：</label>
+<input id="renameBigInput" placeholder="大フォルダ名を編集" type="text"/>
+<button class="ghost" id="renameBigSaveBtn">保存</button>
+</div>
+<div class="row wrap" id="renameSmallRow">
+<label>小フォルダ名：</label>
+<input id="renameSmallInput" placeholder="小フォルダ名を編集" type="text"/>
+<button class="ghost" id="renameSmallSaveBtn">保存</button>
+</div>
+</div>
+<button class="ghost" id="closeModalBtn">閉じる</button>
+</header>
+<div class="body">
+<div class="field" id="kifuList"></div>
+</div>
+<div class="footer">
+<div class="small">出題オン：<span id="enabledCountModal">0</span>件</div>
+<div class="row">
+<button class="ghost" id="clearStatsBtn">統計をリセット（この小フォルダ）</button>
+</div>
+</div>
+</div>
+</div>
 <div class="toast" id="toast"></div>
-
 <script>
 // Patched on 2025-10-18: stable '追加順' numbers across sorts (list & board & result panel).
 /* ====== Compact layout: fit board to viewport (no vertical scroll) ====== */
@@ -1752,6 +1953,7 @@ function stepIfAIShouldPlay(startPhase=false){
   checkFinishIfNeeded();
 }
 function onCellClick(e){
+  if(inspectMode) return;  // v17-fix: disable click during 確認中
   const cell=this;
   if(boardWrap.classList.contains('legal-only') && !cell.classList.contains('legal')){ return; }
   const r=parseInt(cell.dataset.r,10); const c=parseInt(cell.dataset.c,10); const coord=cell.dataset.coord;
@@ -1940,8 +2142,11 @@ function init(){
   setStatus("大/小フォルダを選び、棋譜を登録して開始してください。");
   setProgress(); renderBoard();
 }
-init();
-
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init, { once: true });
+} else {
+  init();
+}
 bigFolderSelect.addEventListener('change', refreshSmallSelect);
 if (typeof newBigFolderName !== 'undefined' && newBigFolderName) {
   newBigFolderName.addEventListener('keydown', (e) => {
@@ -2095,7 +2300,6 @@ if (typeof searchInput !== 'undefined' && searchInput) {
   }
 })();
 </script>
-
 <!-- ===== Collapsible chip lists for 大/小フォルダ（初期は折りたたみ） ===== -->
 <script>
 (function(){
@@ -2152,8 +2356,6 @@ if (typeof searchInput !== 'undefined' && searchInput) {
   });
 })();
 </script>
-
-
 <style>
 
 /* ===== v8 addons: theme, chips, overlays, reorder handle ===== */
@@ -2217,9 +2419,8 @@ body.theme-dark{
 
   /* --- Title bump --- */
   try{
-    document.title = 'オセロ暗記トレーナー v8（SRS/タグ/並べ替え/自動次へ/ダーク）';
-    const h1 = document.querySelector('h1');
-    if(h1) h1.textContent = 'オセロ暗記トレーナー v8';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   /* --- Theme toggle --- */
@@ -2303,11 +2504,11 @@ body.theme-dark{
         'ショートカット：',
         '  N：次の問題を出題',
         '  R：今の問題をもう一度',
-        '  H：期待手ハイライトの切替',
+        '  L：期待手ハイライトの切替',
         '  M：マス内座標の切替',
         '  S：効果音の切替',
-        '  B：両方を自分で打つの切替',
-        '  G：棋譜一覧を開く',
+        '  O：両方を自分で打つの切替',
+        '  K：棋譜一覧を開く',
         '  Esc：祝福画面／一覧を閉じる',
         '  ← / →：確認モードで1手戻る／進む（既存機能）',
       ].join('\n'));
@@ -2406,7 +2607,7 @@ body.theme-dark{
         for(let r=0;r<8;r++) for(let c=0;c<8;c++){
           if(board[r][c]===1) b++; else if(board[r][c]===-1) w++;
         }
-        overlay.textContent = `● ${b}　○ ${w}　| 手番：${currentPlayer===1?'黒':'白'}`;
+        overlay.textContent = `黒 〇 ${b}　| 白 ● ${w}　| 手番：${currentPlayer===1?'黒':'白'}`;
       }catch(_){}
     }
     if(typeof window.renderBoard === 'function'){
@@ -2548,11 +2749,11 @@ body.theme-dark{
     if(tag==='input' || tag==='textarea' || tag==='select') return;
     if(e.key==='n' || e.key==='N'){ e.preventDefault(); try{ startTraining(); }catch(_){ } }
     else if(e.key==='r' || e.key==='R'){ e.preventDefault(); try{ if(currentKifuId) startTrainingWithKifuId(currentKifuId); }catch(_){} }
-    else if(e.key==='h' || e.key==='H'){ e.preventDefault(); try{ toggleHintEl.checked = !toggleHintEl.checked; renderBoard(); }catch(_){} }
+    else if(e.key==='l' || e.key==='L'){ e.preventDefault(); try{ toggleHintEl.checked = !toggleHintEl.checked; renderBoard(); }catch(_){} }
     else if(e.key==='m' || e.key==='M'){ e.preventDefault(); try{ toggleMiniCoordEl.checked = !toggleMiniCoordEl.checked; renderBoard(); }catch(_){} }
     else if(e.key==='s' || e.key==='S'){ e.preventDefault(); try{ toggleSoundEl.checked = !toggleSoundEl.checked; }catch(_){} }
-    else if(e.key==='b' || e.key==='B'){ e.preventDefault(); try{ toggleSelfBothEl.checked = !toggleSelfBothEl.checked; toggleSelfBothEl.dispatchEvent(new Event('change')); }catch(_){} }
-    else if(e.key==='g' || e.key==='G'){ e.preventDefault(); try{ openKifuModal(); }catch(_){} }
+    else if(e.key==='o' || e.key==='O'){ e.preventDefault(); try{ toggleSelfBothEl.checked = !toggleSelfBothEl.checked; toggleSelfBothEl.dispatchEvent(new Event('change')); }catch(_){} }
+    else if(e.key==='k' || e.key==='K'){ e.preventDefault(); try{ openKifuModal(); }catch(_){} }
     else if(e.key==='Escape'){ try{ hideCelebrate(); closeKifuModal(); }catch(_){} }
   });
 
@@ -2807,7 +3008,6 @@ body.theme-dark{
 })(); // end v8 addon IIFE
 
 </script>
-
 <script>
 /* ===== v9 Addons by ChatGPT (2025-10-19) ===== */
 (function(){
@@ -2817,23 +3017,30 @@ body.theme-dark{
 
   // --- Bump title to v9
   try{
-    document.title = 'オセロ暗記トレーナー v9（ヒートマップ/タイム/対称/範囲自動/PNG/キュー/部分エクスポート）';
-    const h1 = document.querySelector('h1');
-    if(h1) h1.textContent = 'オセロ暗記トレーナー v9';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   // --- Small DOM helpers
+  
+  // local DOM helper (v9 scope)
   function el(tag, attrs={}, kids=[]){
-    const n=document.createElement(tag);
-    Object.entries(attrs).forEach(([k,v])=>{
-      if(k==='class') n.className=v;
-      else if(k==='text') n.textContent=v;
-      else if(k==='html') n.innerHTML=v;
-      else n.setAttribute(k,v);
-    });
-    kids.forEach(k => n.appendChild(k));
+    const n = document.createElement(tag);
+    if(attrs && typeof attrs === 'object'){
+      try{
+        Object.entries(attrs).forEach(([k,v])=>{
+          if(k==='class') n.className = v;
+          else if(k==='text') n.textContent = v;
+          else if(k==='html') n.innerHTML = v;
+          else n.setAttribute(k, v);
+        });
+      }catch(_){}
+    }
+    (kids||[]).forEach(k => { try{ n.appendChild(k); }catch(_){ } });
     return n;
   }
+
+  
 
   // ---------- UI injections ----------
   // ② 設定カードを取得（dockGridの最初のcard）
@@ -2848,7 +3055,7 @@ body.theme-dark{
     const heatField = el('div', {class:'field row wrap'});
     const heatChk = el('input', {type:'checkbox', id:'heatChk'});
     heatChk.checked = !!OPT('heatOn', false);
-    const heatLbl = el('label', {class:'small'}, [heatChk, document.createTextNode(' 誤答ヒートマップ（現棋譜）を表示')]);
+    const heatLbl = el('label', {class:'small'}, [heatChk, document.createTextNode(' 誤答ヒートマップ（現棋譜／手番別）を表示')]);
     heatField.appendChild(heatLbl);
 
     // Symmetry
@@ -2862,31 +3069,12 @@ body.theme-dark{
     heatField.appendChild(symLbl);
     heatField.appendChild(symSel);
 
-    // Random range
-    const rngChk = el('input', {type:'checkbox', id:'rangeAutoChk'});
-    rngChk.checked = !!OPT('rangeAuto', false);
-    const rngLbl = el('label', {class:'small'}, [rngChk, document.createTextNode(' 範囲を毎回ランダム化')]);
-    heatField.appendChild(el('span',{style:'width:10px;display:inline-block;'}));
-    heatField.appendChild(rngLbl);
+        settingsCard.appendChild(heatField);
 
-    const minIn = el('input', {type:'number', id:'rangeMinLen', min:'1', max:'60', step:'1', placeholder:'最小長'});
-    const maxIn = el('input', {type:'number', id:'rangeMaxLen', min:'1', max:'60', step:'1', placeholder:'最大長'});
-    minIn.value = String(OPT('rangeMin', 8));
-    maxIn.value = String(OPT('rangeMax', 30));
-    heatField.appendChild(el('span',{class:'small', text:' 長さ：'}));
-    heatField.appendChild(minIn);
-    heatField.appendChild(el('span',{class:'small', text:' 〜 '}));
-    heatField.appendChild(maxIn);
-
-    settingsCard.appendChild(heatField);
-
-    // Persist
+// Persist
     heatChk.addEventListener('change', ()=>{ SETOPT('heatOn', !!heatChk.checked); updateHeatOverlay(); });
     symSel.addEventListener('change', ()=> SETOPT('symMode', symSel.value));
-    rngChk.addEventListener('change', ()=> SETOPT('rangeAuto', !!rngChk.checked));
-    minIn.addEventListener('change', ()=> SETOPT('rangeMin', Math.max(1, Math.min(60, parseInt(minIn.value||'8',10)))));
-    maxIn.addEventListener('change', ()=> SETOPT('rangeMax', Math.max(1, Math.min(60, parseInt(maxIn.value||'30',10)))));
-  }
+    }
 
   // ③ キューカードに機能追加
   (function(){
@@ -2975,7 +3163,8 @@ body.theme-dark{
       if(wrap) wrap.classList.toggle('heat-on', on);
       if(!on) return;
       const k = getCurrentKifuObj();
-      const map = (k && k.mistakeCounts) || {};
+      const turnKey = (typeof moveIndex==='number') ? String(moveIndex + 1) : null;
+      const map = (k && k.mistakeByTurn && turnKey && k.mistakeByTurn[turnKey]) ? k.mistakeByTurn[turnKey] : {};
       let maxv = 0;
       Object.values(map).forEach(v => { if(v>maxv) maxv = v; });
       const cells = document.querySelectorAll('#board .cell');
@@ -3012,6 +3201,16 @@ body.theme-dark{
           if(coord && k){
             k.mistakeCounts = k.mistakeCounts || {};
             k.mistakeCounts[coord] = (k.mistakeCounts[coord]||0) + 1;
+// per-turn logging for current kifu and turn
+k.mistakeByTurn = k.mistakeByTurn || {};
+var _turnNum = (typeof moveIndex==='number') ? (moveIndex + 1) : null;
+if(_turnNum != null){
+  var _key = String(_turnNum);
+  var _tm = k.mistakeByTurn[_key] || {};
+  _tm[coord] = (_tm[coord]||0) + 1;
+  k.mistakeByTurn[_key] = _tm;
+}
+
             saveStore(store);
           }
         }
@@ -3050,19 +3249,6 @@ body.theme-dark{
     const orig = window.startTrainingCore;
     window.startTrainingCore = function(picked){
       try{
-        // range auto
-        if(OPT('rangeAuto', false)){
-          const total = (picked.moves||[]).length;
-          const minL = Math.max(1, Math.min(total, OPT('rangeMin', 8)));
-          const maxL = Math.max(minL, Math.min(total, OPT('rangeMax', 30)));
-          const len = Math.floor(Math.random()*(maxL - minL + 1)) + minL;
-          const start = Math.floor(Math.random()*(total - len + 1)) + 1; // 1-based
-          const end = start + len - 1;
-          const sIn = document.getElementById('startIndexInput');
-          const eIn = document.getElementById('endIndexInput');
-          if(sIn) sIn.value = String(start);
-          if(eIn) eIn.value = String(end);
-        }
         // symmetry
         const mode = pickSymMode();
         if(mode && mode!=='NONE'){
@@ -3219,8 +3405,6 @@ body.theme-dark{
 
 })(); // end v9
 </script>
-
-
 <!-- ===== v10 Addons by ChatGPT (2025-10-19) ===== -->
 <style>
 /* v10: timer overlay, recorder overlay, dropzone */
@@ -3261,9 +3445,8 @@ body.theme-dark .rec-layer .panel{ background: rgba(21,26,31,0.98); color:#e7ebf
 
   // ---- Version bump ----
   try{
-    document.title = 'オセロ暗記トレーナー v10（録画入力/タイムアタック/対称90°/タグ一括/Drag&Drop/全体SRS/CSVログ/合法手数）';
-    const h1 = document.querySelector('h1');
-    if(h1) h1.textContent = 'オセロ暗記トレーナー v10';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   // ---- Topbar: global SRS due count ----
@@ -3316,7 +3499,7 @@ body.theme-dark .rec-layer .panel{ background: rgba(21,26,31,0.98); color:#e7ebf
         const LM = legalMoves(board, currentPlayer);
         const el = document.getElementById('countOverlay');
         if(el){
-          el.textContent = `● ${b}　○ ${w}　| 手番：${currentPlayer===1?'黒':'白'}　| 合法手：${LM.length}　| 空：${empty}`;
+          el.textContent = `黒 〇 ${b}　| 白 ● ${w}　| 手番：${currentPlayer===1?'黒':'白'}　| 合法手：${LM.length}　| 空：${empty}`;
         }
       }catch(_){}
     }
@@ -3853,7 +4036,6 @@ body.theme-dark .rec-layer .panel{ background: rgba(21,26,31,0.98); color:#e7ebf
 
 })(); // end v10
 </script>
-
 <!-- ===== v11 Addons by ChatGPT (2025-10-19) ===== -->
 <style>
 /* v11: rotation, mcq, keyboard overlay */
@@ -3865,21 +4047,11 @@ body.theme-dark .rec-layer .panel{ background: rgba(21,26,31,0.98); color:#e7ebf
 #boardWrap.rot180 .inspect-action,
 #boardWrap.rot180 .timer-overlay { transform: rotate(180deg); }
 
-.mcq-overlay{
-  position:absolute; left:50%; transform:translateX(-50%); bottom:12px; z-index:7;
-  display:none; gap:6px; flex-wrap:wrap; justify-content:center;
-}
-.mcq-overlay .mcq-btn{
-  padding:6px 10px; border-radius:999px; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:.92rem;
-}
-body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a; color:#e7ebf3; }
-
-.kbd-overlay{
+body.theme-dark .kbd-overlay{
   position:absolute; left:10px; bottom:10px; z-index:7;
   background:rgba(0,0,0,.55); color:#fff; padding:2px 6px; border-radius:6px; font-variant-numeric:tabular-nums; display:none;
 }
 </style>
-
 <script>
 (function(){
   // Local option helpers (v11 namespace)
@@ -3888,9 +4060,8 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
 
   // ---- Version bump ----
   try{
-    document.title = 'オセロ暗記トレーナー v11（白視点/読み上げ/四択/キーボード入力/全体ヒート/キュー並替/統計/Anki TSV）';
-    const h1 = document.querySelector('h1');
-    if(h1) h1.textContent = 'オセロ暗記トレーナー v11';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   // ---- Settings card reference ----
@@ -3918,25 +4089,9 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
     field.appendChild(document.createTextNode('　'));
     field.appendChild(speechLbl);
 
-    // MCQ
-    const mcqChk = document.createElement('input'); mcqChk.type='checkbox'; mcqChk.id='mcqChk';
-    mcqChk.checked = !!OPT('mcq', false);
-    const mcqLbl = document.createElement('label'); mcqLbl.className='small';
-    mcqLbl.appendChild(mcqChk); mcqLbl.appendChild(document.createTextNode(' 四択クイズモード（1〜4キー対応）'));
-    field.appendChild(document.createTextNode('　'));
-    field.appendChild(mcqLbl);
-
-    // Global heatmap
-    const gheatChk = document.createElement('input'); gheatChk.type='checkbox'; gheatChk.id='globalHeatChk';
-    gheatChk.checked = !!OPT('globalHeat', false);
-    const gheatLbl = document.createElement('label'); gheatLbl.className='small';
-    gheatLbl.appendChild(gheatChk); gheatLbl.appendChild(document.createTextNode(' 全体誤答ヒートマップ'));
-    field.appendChild(document.createTextNode('　'));
-    field.appendChild(gheatLbl);
-
     // Tips
     const tip = document.createElement('span'); tip.className='small muted';
-    tip.textContent = '（ショートカット：T=白視点／V=読み上げ／C=四択切替／1〜4=四択回答／A〜H→1〜8=座標入力）';
+    tip.textContent = '（ショートカット：T=白視点／V=読み上げ／A〜H→1〜8=座標入力）';
     field.appendChild(document.createTextNode('　'));
     field.appendChild(tip);
 
@@ -3985,55 +4140,6 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
     window._v11_playSound_patched = true;
   }
 
-  // ---- MCQ overlay ----
-  (function(){
-    const wrap = document.getElementById('boardWrap');
-    if(!wrap) return;
-    if(!document.getElementById('mcqOverlay')){
-      const o = document.createElement('div'); o.id='mcqOverlay'; o.className='mcq-overlay';
-      wrap.appendChild(o);
-    }
-  })();
-
-  function mcqOn(){ return !!OPT('mcq', false); }
-  function updateMCQ(){
-    try{
-      const overlay = document.getElementById('mcqOverlay'); if(!overlay) return;
-      if(!mcqOn() || !window.training){ overlay.style.display='none'; return; }
-      const myTurn = window.selfBothMode || (window.currentPlayer === window.myColor);
-      const token = window.expectedMoves ? window.expectedMoves[window.moveIndex] : null;
-      if(!myTurn || !token || token==='P' || token==='PASS'){ overlay.style.display='none'; return; }
-      const LM = window.legalMoves(window.board, window.currentPlayer);
-      const rc = window.coordToRC(token);
-      const ok = LM.find(m=> m.r===rc[0] && m.c===rc[1]);
-      if(!ok){ overlay.style.display='none'; return; }
-
-      const opts = [ token ];
-      const others = LM.map(m => window.toCoord(m.r, m.c)).filter(c => c !== token);
-      for(let i=others.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=others[i]; others[i]=others[j]; others[j]=t; }
-      opts.push(...others.slice(0,3));
-      for(let i=opts.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=opts[i]; opts[i]=opts[j]; opts[j]=t; }
-
-      overlay.innerHTML='';
-      opts.forEach((coord, idx)=>{
-        const b = document.createElement('button'); b.className='mcq-btn'; b.dataset.coord=coord;
-        b.textContent = (idx+1) + '. ' + coord;
-        b.addEventListener('click', ()=>{
-          const cell = document.querySelector('.cell[data-coord="'+coord+'"]');
-          if(cell) cell.click();
-          updateMCQ();
-        });
-        overlay.appendChild(b);
-      });
-      overlay.style.display='flex';
-    }catch(_){}
-  }
-
-  if(typeof window.renderBoard === 'function'){
-    const orig = window.renderBoard;
-    window.renderBoard = function(){ orig(); try{ updateMCQ(); }catch(_){} try{ updateGlobalHeatUI(); drawGlobalHeat(); }catch(_){} };
-  }
-
   // Keyboard shortcuts for MCQ and toggles + coordinate input
   (function(){
     const wrap = document.getElementById('boardWrap');
@@ -4049,34 +4155,23 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
       if(tag==='input' || tag==='textarea' || tag==='select') return;
 
       // Toggles
-      if(e.key==='t' || e.key==='T'){ const v=!OPT('whiteView', false); SETOPT('whiteView', v); applyWhiteView(); e.preventDefault(); return; }
-      if(e.key==='v' || e.key==='V'){ const v=!OPT('speech', false); SETOPT('speech', v); speakJa(v?'読み上げオン':'読み上げオフ'); e.preventDefault(); return; }
-      if(e.key==='c' || e.key==='C'){ const v=!OPT('mcq', false); SETOPT('mcq', v); updateMCQ(); e.preventDefault(); return; }
-
-      // MCQ 1-4
-      if(['1','2','3','4'].includes(e.key)){
-        const overlay = document.getElementById('mcqOverlay');
-        if(overlay && overlay.style.display!=='none'){
-          const idx = parseInt(e.key,10)-1;
-          const btn = overlay.querySelectorAll('.mcq-btn')[idx];
-          if(btn){ e.preventDefault(); btn.click(); return; }
-        }
-      }
-
+      if(e.key==='t' || e.key==='T'){ const v=!OPT('whiteView', false); SETOPT('whiteView', v); applyWhiteView(); e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); return; }
+      if(e.key==='v' || e.key==='V'){ const v=!OPT('speech', false); SETOPT('speech', v); speakJa(v?'読み上げオン':'読み上げオフ'); e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); return; }
       // Coordinate typing A-H then 1-8
       if(/^[a-hA-H]$/.test(e.key)){
         buf = e.key.toUpperCase();
         const o = document.getElementById('kbdOverlay'); if(o){ o.textContent = '入力: ' + buf + ' _'; o.style.display='inline-block'; }
-        e.preventDefault(); return;
+        e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); return;
       }
       if(/^[1-8]$/.test(e.key) && buf){
         const coord = buf + e.key;
         const o = document.getElementById('kbdOverlay'); if(o){ o.textContent = '入力: ' + coord; }
         const cell = document.querySelector('.cell[data-coord="'+coord+'"]');
         setTimeout(resetBuf, 600);
-        if(cell){ e.preventDefault(); cell.click(); }
+        if(cell){ e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); cell.click(); }
         return;
       }
+      if(e.key==='Escape'){ resetBuf(); e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); return; }
       if(e.key==='Backspace'){ resetBuf(); return; }
     }, {capture:true});
   })();
@@ -4092,7 +4187,16 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
       try{
         const coord = cell && cell.getAttribute ? cell.getAttribute('data-coord') : null;
         if(coord){
-          const map = getGlobalMap(); map[coord] = (map[coord]||0) + 1; setGlobalMap(map);
+          // use mistakes from current kifu at the current turn only
+      const k = (typeof getCurrentKifuObj==='function') ? getCurrentKifuObj() : null;
+      const turnNum = (typeof moveIndex==='number') ? (moveIndex + 1) : null;
+      const g = getGlobalMap() || {};
+const key = (turnNum != null) ? ('turn:'+String(turnNum)) : 'ALL';
+g[key] = g[key] || {};
+g[key][coord] = (g[key][coord]||0) + 1;
+g['ALL'] = g['ALL'] || {};
+g['ALL'][coord] = (g['ALL'][coord]||0) + 1;
+setGlobalMap(g);
         }
       }catch(_){}
       orig(cell);
@@ -4122,8 +4226,14 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
   function drawGlobalHeat(){
     try{
       if(!OPT('globalHeat', false)) return;
+      // If local per-kifu heat is on, give it priority and skip global draw.
+      if(getHeatOnV9 && getHeatOnV9()) return;
       ensureHeatLayerV11();
-      const map = getGlobalMap();
+      // aggregate across all problems; prefer current turn slice
+const turnNum = (typeof moveIndex==='number') ? (moveIndex + 1) : null;
+const g = getGlobalMap() || {};
+const key = (turnNum != null) ? ('turn:' + String(turnNum)) : null;
+      const map = (key && g[key]) ? g[key] : {};
       let maxv = 0; Object.values(map).forEach(v=>{ if(v>maxv) maxv=v; });
       const cells = document.querySelectorAll('#board .cell');
       cells.forEach(cell=>{
@@ -4306,8 +4416,6 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
 
 })(); // end v11
 </script>
-
-
 <!-- ===== v12 Addons by ChatGPT (2025-10-19) ===== -->
 <style>
 /* v12: voice overlay */
@@ -4325,9 +4433,8 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
 
   // ---- Version bump ----
   try{
-    document.title = 'オセロ暗記トレーナー v12（音声入力/今日のメニュー/タグ一括/表示中エクスポート/誤答復習/SRS評価）';
-    const h1 = document.querySelector('h1');
-    if(h1) h1.textContent = 'オセロ暗記トレーナー v12';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   // ---- Topbar: 今日のメニュー & 音声入力 ----
@@ -4606,8 +4713,6 @@ body.theme-dark .mcq-overlay .mcq-btn{ background:#1b2027; border-color:#2a2f3a;
 
 })(); // end v12
 </script>
-
-
 <!-- ===== v13 Addons by ChatGPT (2025-10-19) ===== -->
 <style>
 /* v13: focus mode and small UI tweaks */
@@ -4619,8 +4724,8 @@ body.focus-only #boardWrap{ box-shadow: 0 0 0 3px #8ab4ff inset; }
 <script>
 (function(){
   try{
-    document.title = 'オセロ暗記トレーナー v13（ストリーク/Undo/集中/手動PASS/重複検出/共有/ホットキー強化/今日の進捗）';
-    const h1 = document.querySelector('h1'); if(h1) h1.textContent = 'オセロ暗記トレーナー v13';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   const topbar = document.querySelector('.topbar');
@@ -4635,7 +4740,7 @@ body.focus-only #boardWrap{ box-shadow: 0 0 0 3px #8ab4ff inset; }
     }
   }
 
-  function getLogs(){ try{ return JSON.parse(localStorage.getItem(STORE_PREFIX+'opt10_logs')||'[]'); }catch(_){ return []; } }
+  
   function dateKey(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+dd; }
   function updateStreak(){
     try{
@@ -4759,8 +4864,6 @@ body.focus-only #boardWrap{ box-shadow: 0 0 0 3px #8ab4ff inset; }
 
 })(); // end v13
 </script>
-
-
 <!-- ===== v14 Addons by ChatGPT (2025-10-19) ===== -->
 <style>
 /* v14: XP/Level, Achievements, Daily Missions, Share Card */
@@ -4788,7 +4891,6 @@ body.theme-dark .badge{ background:#1a2028; border-color:#2a2f3a; }
 .share-tip{ font-size:.86rem; color:#666; }
 body.theme-dark .share-tip{ color:#a9b2c3; }
 </style>
-
 <script>
 (function(){
   // ========= Helpers =========
@@ -5245,9 +5347,8 @@ body.theme-dark .share-tip{ color:#a9b2c3; }
 
   // ========= Title bump to v14 =========
   try{
-    document.title = 'オセロ暗記トレーナー v14（XP/実績/ミッション/シェア/タグ熟達）';
-    const h1 = document.querySelector('h1');
-    if(h1) h1.textContent = 'オセロ暗記トレーナー v14';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   // Initial update
@@ -5256,8 +5357,6 @@ body.theme-dark .share-tip{ color:#a9b2c3; }
 
 })(); // end v14
 </script>
-
-
 <!-- ===== v15 Addons by ChatGPT (2025-10-19) ===== -->
 <style>
 /* v15: calendar, weekly challenge, freeze */
@@ -5286,7 +5385,7 @@ body.theme-dark .badge.small{ background:#1a2028; border-color:#2a2f3a; }
   const K = (k)=> STORE_PREFIX + 'opt15_' + k;
   const JGET = (k,d)=>{ try{ const v=localStorage.getItem(K(k)); return v==null?d:JSON.parse(v);}catch(_){ return d; } };
   const JSET = (k,v)=>{ try{ localStorage.setItem(K(k), JSON.stringify(v)); }catch(_){ } };
-  function getLogs(){ try{ return JSON.parse(localStorage.getItem(STORE_PREFIX+'opt10_logs')||'[]'); }catch(_){ return []; } }
+  
   function dayKey(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+dd; }
   function isoWeekKey(dt){
     const d = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
@@ -5556,8 +5655,6 @@ body.theme-dark .badge.small{ background:#1a2028; border-color:#2a2f3a; }
 
 })(); // end v15
 </script>
-
-
 <!-- ===== v16 Addons by ChatGPT (2025-10-19) ===== -->
 <style>
 /* v16: coach overlay & pomodoro */
@@ -5582,8 +5679,8 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
 
   // ---- Version bump to v16 ----
   try{
-    document.title = 'オセロ暗記トレーナー v16（チャレンジ/フリーズ/カレンダー/コーチ/ポモドーロ/称号）';
-    const h1=document.querySelector('h1'); if(h1) h1.textContent='オセロ暗記トレーナー v16';
+    // [refactor] removed version bump
+    // [refactor] removed version bump
   }catch(_){}
 
   // ---- Level titles ----
@@ -5729,8 +5826,6 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
 
 })(); // end v16
 </script>
-
-
 <!-- ===== v17 Addon: その他機能の表示/非表示トグル（2025-10-19） ===== -->
 <style>
   /* 「その他機能一覧」用のラッパ。初期は非表示 */
@@ -5831,7 +5926,6 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
 })();
 </script>
 <!-- ===== /v17 Addon ===== -->
-
 <!-- ===== v17 Patch by ChatGPT (全体マージ・インポート + コーチ機能の廃止) ===== -->
 <script>
 (function(){
@@ -5975,7 +6069,10 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
     try{
       const sigSet = new Set();
       Object.values(base.kifuByPath||{}).forEach(list=>{
-        (list||[]).forEach(k=>{ if((typeof isCleared==='function'? isCleared(k) : !!(k.stats && k.stats.solved>0))) if(k.sig) sigSet.add(k.sig); });
+        (list||[]).forEach(k=>{ const ok = !!(k && k.stats && (k.stats.solved||0)>0);
+        const sig = k && (k.sig || (k.moves ? canonicalSignature(k.moves) : null));
+        if(ok && sig) sigSet.add(sig);
+});
       });
       base.learnedOnceSigs = Array.from(sigSet);
     }catch(_){}
@@ -6026,8 +6123,12 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
       try{
         const set = new Set();
         Object.values(store.kifuByPath||{}).forEach(list=>{
-          (list||[]).forEach(k=>{ if(isCleared(k) && k.sig) set.add(k.sig); });
+          (list||[]).forEach(k=>{
+          const ok = !!(k && k.stats && (k.stats.solved||0)>0);
+          const sig = k && (k.sig || (k.moves ? canonicalSignature(k.moves) : null));
+          if(ok && sig) set.add(sig);
         });
+});
         const el = document.getElementById('uniqueSolved'); if(el) el.textContent = String(set.size);
       }catch(_){}
     }
@@ -6047,17 +6148,14 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
   // ========= bump title =========
   try{
     document.title = (document.title||'').replace(/v(\d+)/, 'v17') || 'オセロ暗記トレーナー v17';
-    const h1 = document.querySelector('h1'); if(h1) h1.textContent = 'オセロ暗記トレーナー v17';
+    // [refactor] removed version bump
   }catch(_){}
 })();
 </script>
-
-
 <style>
 /* === Coach feature removed (UI hidden) === */
 #coachSel, #coachRow, #coachOverlay { display: none !important; }
 </style>
-
 <script>
 // === Coach feature removed (hard disable & UI cleanup) ===
 (function(){
@@ -6108,150 +6206,1302 @@ body.theme-dark .title-badge{ background:#2b2414; border-color:#3a321a; color:#f
   }, 400);
 })();
 </script>
+<!-- ===== v17 Fixes by ChatGPT (2025-10-20) ===== -->
+<script>
+// v17-1: 「暗記成功！」画面を最小構成にクリーンアップ（PNGに載っている情報のみ表示）
+// v17-2: 「盤面リセット」→「トレーニング開始」で直前の問題を再スタート
 
-<!-- ==== Patch: Oct 2025 — minimize Celebrate info & fix "盤面リセット" behavior ==== -->
+(function(){
+  // --- v17-1: Clean up success modal ---
+  function cleanResultInfoMinimal(){
+    try{
+      var box = document.getElementById('resultInfo');
+      if(!box) return;
+      var kifu = document.getElementById('resultKifuText');
+      var note = document.getElementById('resultCommentInput');
+      // 残すべきもの（棋譜フィールド／コメントフィールド）以外の .field を削除
+      Array.prototype.slice.call(box.querySelectorAll('.field')).forEach(function(f){
+        if(f.contains(kifu) || f.contains(note)) return;
+        f.parentNode && f.parentNode.removeChild(f);
+      });
+      // ついでに後付けされた既知の行IDを明示的に除去
+      ['srsRatingRow','coachRow'].forEach(function(id){
+        var n = document.getElementById(id);
+        if(n && n.parentNode === box) n.parentNode.removeChild(n);
+      });
+    }catch(e){ /* ignore */ }
+  }
+  if (typeof window.showCelebrate === 'function' && !window._v17_minimalCelebratePatched){
+    var _origShowCelebrate = window.showCelebrate;
+    window.showCelebrate = function(total, mistakes){
+      var out = _origShowCelebrate(total, mistakes);
+      try{ cleanResultInfoMinimal(); }catch(_){}
+      return out;
+    };
+    window._v17_minimalCelebratePatched = true;
+  }
+
+  // --- v17-2: Reset keeps current problem; Start resumes same id ---
+  (function(){
+    var reset = document.getElementById('resetBtn');
+    var start = document.getElementById('startBtn');
+    if(!reset || !start) return;
+    window._v17_resumeAfterReset = false;
+
+    // Reset: 盤面だけ初期化し、同一問題を再開フラグを立てる
+    reset.addEventListener('click', function(){
+      window._v17_resumeAfterReset = true;
+      // ラベルが消えないように、リセット直後に番号ラベルを再描画
+      setTimeout(function(){ try{ if (typeof updateBoardIndexLabel==='function') updateBoardIndexLabel(); }catch(_){} }, 0);
+    }, {capture:true});
+
+    // Start: フラグが立っていれば直前の currentKifuId を再スタート
+    start.addEventListener('click', function(e){
+      try{
+        if(window._v17_resumeAfterReset && typeof startTrainingWithKifuId==='function' && typeof currentKifuId!=='undefined' && currentKifuId){
+          e.stopImmediatePropagation(); // 既存の startTraining() ハンドラをキャンセル
+          window._v17_resumeAfterReset = false;
+          try{
+            startTrainingWithKifuId(currentKifuId);
+          }catch(ex){
+            // 念のためフォールバック
+            if (typeof startTraining === 'function') startTraining();
+          }
+        }
+      }catch(_){}
+    }, {capture:true});
+  })();
+})();
+</script>
+<!-- v17 note-bar patch (備考を座標行の直下に常時表示／トレ中のみ) -->
 <style>
-  /* Celebrate modal: keep only what's in the screenshot */
-  #celebrate .content .extra,
-  #celebrate .content .stats,
-  #celebrate .content .hints,
-  #celebrate .content .links { display: none !important; }
+  .note-bar{ margin-top:6px; padding:8px 10px; background:#fffdfa; border:1px solid #f1e3c7; border-radius:8px; font-size:0.92rem; }
+  body.theme-dark .note-bar{ background:#2a2418; border-color:#4a3f24; }
+  .note-bar .title{ font-weight:700; margin-right:6px; }
 </style>
 <script>
 (function(){
-  // --- Helper to get current kifu object by id ---
-  function _getCurrentKifu(){
+  function ensureNoteBar(){
     try{
-      const pk = (typeof currentPath === 'function') ? currentPath() : null;
-      if(!pk || !window.store || !window.store.kifuByPath) return null;
-      const baseArr = window.store.kifuByPath[pk] || [];
-      const k = baseArr.find(x => x.id === window.currentKifuId);
-      return k || null;
-    }catch(e){ return null; }
+      var card = document.querySelector('.rightDock .card'); // board card
+      if(!card) return null;
+      var rowJust = card.querySelector('.row-just');
+      if(!rowJust) return null;
+      var ex = document.getElementById('liveNoteBar');
+      if(ex) return ex;
+      var bar = document.createElement('div');
+      bar.id = 'liveNoteBar';
+      bar.className = 'note-bar';
+      bar.style.display = 'none';
+      bar.innerHTML = '<span class="title">備考</span><span id="liveNoteText"></span>';
+      rowJust.insertAdjacentElement('afterend', bar);
+      return bar;
+    }catch(_){ return null; }
   }
-
-  // --- Reset the board to the start position of the current problem (respecting rangeStart) ---
-  window.resetBoardToCurrent = function(){
+  function currentKifu(){
     try{
-      const k = _getCurrentKifu();
-      // Preserve the current problem ID so "トレーニング開始" restarts THIS problem
-      if(window.currentKifuId) window._reuseKifuId = window.currentKifuId;
+      var pk = (typeof currentPath==='function') ? currentPath() : null;
+      var arr = pk ? (store.kifuByPath[pk]||[]) : [];
+      return arr.find(function(x){ return x && x.id===(typeof currentKifuId !== "undefined" ? currentKifuId : window.currentKifuId); }) || null;
+    }catch(_){ return null; }
+  }
+  function updateLiveNote(){
+    try{
+      var bar = ensureNoteBar();
+      if(!bar) return;
+      var k = currentKifu();
+      var txt = (k && typeof k.comment==='string') ? k.comment.trim() : '';
+      var _isTraining = (typeof training !== "undefined" ? training : !!window.training);
+      var show = !!(_isTraining && txt);
+      bar.style.display = show ? 'block' : 'none';
+      var span = document.getElementById('liveNoteText'); if(span) span.textContent = txt;
+    }catch(_){}
+  }
+  // patch startTrainingCore to update when a problem starts
+  if(typeof window.startTrainingCore === 'function' && !window._notePatchApplied){
+    var orig = window.startTrainingCore;
+    window.startTrainingCore = function(p){
+      var out = orig(p);
+      try{ updateLiveNote(); }catch(_){}
+      return out;
+    };
+    window._notePatchApplied = true;
+  }
+  // update when comment is edited in result panel
+  document.addEventListener('input', function(e){
+    if(e && e.target && e.target.id === 'resultCommentInput'){ try{ updateLiveNote(); }catch(_){} }
+  }, true);
+  // also update on renderBoard (safe, cheap)
+  if(typeof window.renderBoard === 'function'){
+    var origRB = window.renderBoard;
+    window.renderBoard = function(){ var r = origRB(); try{ updateLiveNote(); }catch(_){ } return r; };
+  }
+  // initialize once DOM is ready
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(updateLiveNote, 60); });
+})();
+</script>
+<!-- ===== v17 Maintainability Layer (2025-10-23) ===== -->
+<script>
+;(()=>{'use strict';
+/**
+ * Reversi Trainer Maintainability Layer
+ * - Provides a tiny event bus (RT.bus) and central wrappers for legacy globals
+ * - Centralizes "unique solved" recomputation and version title bump
+ * - Adds a small action registry to avoid scattered anonymous handlers
+ *   (All features are no-op compatible and keep behavior unchanged.)
+ */
 
-      // If we don't have a current problem yet, just clear to the standard initial board.
-      if(!k){
-        if(typeof newBoard === 'function') window.board = newBoard();
-        if(typeof BLACK !== 'undefined') window.currentPlayer = BLACK;
-        window.moveIndex = 0;
-        if(typeof setStatus === 'function') setStatus("盤面を初期化しました。");
-        if(typeof setProgress === 'function') setProgress();
-        if(typeof renderBoard === 'function') renderBoard();
-        window.training = false;
-        return;
-      }
+/** @namespace */
+const RT = window.RT || (window.RT = {});
+RT.VERSION = '17.1-maint';
+RT.conf = Object.freeze({ STORE_PREFIX: (window.STORE_PREFIX || 'othello_trainer__') });
 
-      // Use current range inputs to determine "start hand"
-      const moves = Array.isArray(k.moves) ? k.moves.slice() : [];
-      window.expectedMoves = moves.slice(); // for consistency with training state
-      // Compute rangeStart/rangeEnd in the same way as startTrainingCore
-      var rawS = parseInt((window.startIndexInput && startIndexInput.value) || "1", 10);
-      var rawE = parseInt((window.endIndexInput && endIndexInput.value) || String(moves.length), 10);
-      window.rangeStart = Number.isFinite(rawS) ? Math.max(1, Math.min(rawS, moves.length)) : 1;
-      window.rangeEnd   = Number.isFinite(rawE) ? Math.max(window.rangeStart, Math.min(rawE, moves.length)) : moves.length;
-
-      // Initialize board and replay up to rangeStart-1
-      if(typeof newBoard === 'function') window.board = newBoard();
-      window.currentPlayer = (typeof BLACK !== 'undefined') ? BLACK : 1;
-      window.moveIndex = 0;
-      let passes = 0;
-      for(let i = 0; i < window.rangeStart - 1 && i < moves.length; i++){
-        const token = moves[i];
-        // Handle PASS tokens
-        if(token === "P" || token === "PASS"){
-          window.currentPlayer = -window.currentPlayer;
-          passes++; if(passes>=2) break;
-          continue;
-        }
-        passes = 0;
-        if(typeof coordToRC !== 'function' || typeof legalMoves !== 'function' || typeof applyMove !== 'function') break;
-        const rc = coordToRC(token);
-        if(!rc) break;
-        const lm = legalMoves(window.board, window.currentPlayer);
-        const match = lm.find(m => m.r === rc[0] && m.c === rc[1]);
-        if(!match) break;
-        applyMove(window.board, match, window.currentPlayer);
-        window.currentPlayer = -window.currentPlayer;
-        window.moveIndex = i+1;
-      }
-
-      // UI updates
-      if(typeof updateBoardIndexLabel === 'function') updateBoardIndexLabel();
-      if(typeof setProgress === 'function') setProgress();
-      if(typeof renderBoard === 'function') renderBoard();
-      if(typeof setStatus === 'function') setStatus("盤面を初期化しました。");
-      window.training = false;
-    }catch(e){
-      console.warn("resetBoardToCurrent error:", e);
-    }
+/** micro event bus */
+RT.bus = (function(){
+  const map = new Map();
+  return {
+    on(evt, fn){
+      const arr = map.get(evt) || [];
+      arr.push(fn);
+      map.set(evt, arr);
+      return ()=>{ const a = map.get(evt)||[]; const i = a.indexOf(fn); if(i>=0){ a.splice(i,1); } };
+    },
+    emit(evt, payload){ (map.get(evt)||[]).slice().forEach(fn=>{ try{ fn(payload); }catch(e){ console.error('[RT.bus]', evt, e); } }); }
   };
+})();
 
-  // --- Ensure "トレーニング開始" restarts the same problem after a reset ---
-  if(typeof window.startTraining === 'function'){
-    const _origStartTraining = window.startTraining;
-    window.startTraining = function(){
-      try{
-        if(window._reuseKifuId){
-          const pk = (typeof currentPath === 'function') ? currentPath() : null;
-          const arr = (window.store && window.store.kifuByPath && pk) ? (window.store.kifuByPath[pk] || []) : [];
-          const picked = arr.find(x => x.id === window._reuseKifuId);
-          window._reuseKifuId = null;
-          if(picked && typeof startTrainingCore === 'function'){
-            return startTrainingCore(picked);
-          }
-        }
-      }catch(e){ console.warn(e); }
-      return _origStartTraining();
-    };
+/** helpers */
+const $ = (id)=> document.getElementById(id);
+const onReady = (fn)=> (document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn, {once:true}) : fn());
+const assert = (cond, msg)=>{ if(!cond){ console.warn('ASSERT:', msg); } return !!cond; };
+RT.ls = {
+  get(key, d){ try{ const v = localStorage.getItem(RT.conf.STORE_PREFIX + key); return v==null?d:JSON.parse(v);}catch(_){ return d; } },
+  set(key, v){ try{ localStorage.setItem(RT.conf.STORE_PREFIX + key, JSON.stringify(v)); }catch(_){ } }
+};
+
+/** store facade keeps legacy shape but gives single place to change in future */
+RT.store = {
+  get(){ try{ return window.store || (window.loadStore? window.loadStore() : null); }catch(_){ return null; } },
+  save(s){ if(typeof window.saveStore==='function'){ window.saveStore(s); RT.bus.emit('store:saved', s); } else { window.store = s; RT.bus.emit('store:saved', s); } },
+  currentPath(){ try{ return (typeof window.currentPath==='function') ? window.currentPath() : (window.selectedPath || ''); }catch(_){ return ''; } },
+  listAt(path){ const s=this.get(); return (s && s.kifuByPath && s.kifuByPath[path]) ? s.kifuByPath[path] : []; },
+  findById(id){
+    const s=this.get(); if(!s||!s.kifuByPath) return null;
+    for(const [p,arr] of Object.entries(s.kifuByPath)){ const k = (arr||[]).find(k=>k&&k.id===id); if(k) return {path:p, kifu:k}; }
+    return null;
   }
+};
 
-  // --- Intercept the existing click on 「盤面リセット」 so it DOES NOT switch problems ---
-  const resetBtn = document.getElementById('resetBtn');
-  if(resetBtn){
-    // Capture-phase listener to override any existing handlers
-    resetBtn.addEventListener('click', function(ev){
+/** Centralize "version title bump" to avoid many scattered patches */
+RT.bumpTitle = function(versionLabel){
+  try{
+    const label = 'オセロ暗記トレーナー ' + versionLabel;
+    document.title = label;
+    const h1 = document.querySelector('h1'); if(h1) h1.textContent = label;
+  }catch(_){}
+};
+
+/** one-time wrappers -> emit lifecycle events */
+(function wireLifecycle(){
+  const wrapOnce = (name, evt, after=true)=>{
+    const fn = window[name];
+    if(typeof fn !== 'function' || window['__rt_wrapped__'+name]) return;
+    window['__rt_wrapped__'+name] = true;
+    window[name] = function(){
+      if(!after) RT.bus.emit(evt, {args:arguments});
+      const ret = fn.apply(this, arguments);
+      if(after) RT.bus.emit(evt, {args:arguments, ret});
+      return ret;
+    };
+  };
+  wrapOnce('renderBoard', 'ui:renderBoard', true);
+  wrapOnce('updateCountsAndPath', 'stats:updated', true);
+  wrapOnce('saveStore', 'store:saved', true);
+  wrapOnce('showCelebrate', 'ui:celebrate', true);
+  wrapOnce('startTraining', 'training:started', true);
+  wrapOnce('startTrainingWithKifuId', 'training:started', true);
+})();
+
+/** Unify "unique solved" computation here (removes multiple ad-hoc overrides) */
+RT.recomputeUniqueSolved = function(){
+  try{
+    const s = RT.store.get(); if(!s||!s.kifuByPath) return;
+    const set = new Set();
+    const isCleared = (typeof window.isCleared === 'function') ? window.isCleared : (k=> !!(k?.stats?.solved>0));
+    Object.values(s.kifuByPath).forEach(arr=> (arr||[]).forEach(k=>{ if(isCleared(k) && k.sig) set.add(k.sig); }));
+    const el = $('uniqueSolved'); if(el) el.textContent = String(set.size);
+  }catch(e){ console.warn(e); }
+};
+RT.bus.on('stats:updated', RT.recomputeUniqueSolved);
+onReady(RT.recomputeUniqueSolved);
+
+/** Small, declarative action registry reduces scattered anonymous handlers */
+RT.actions = Object.create(null);
+RT.registerAction = function(id, handler){
+  if(!assert(typeof handler==='function', 'handler must be function')) return;
+  RT.actions[id] = handler;
+  const btn = $(id);
+  if(btn && !btn.__rt_bound){
+    btn.__rt_bound = true;
+    btn.addEventListener('click', (ev)=>handler(ev));
+  }
+};
+
+/** Example: centralize exportStats action if button exists */
+RT.registerAction('exportStatsBtn', function(){
+  const pk = RT.store.currentPath(); if(!pk) return;
+  const arr = RT.store.listAt(pk);
+  const toCsv = (rows)=> rows.map(r=> r.map(x=>'"'+String(x).replaceAll('"','""')+'"').join(',')).join('\\n');
+  const header = ['id','name','len','enabled','attempts','solved','mistakes','best_ms','avg_ms','tags'];
+  const rows = [header];
+  arr.forEach(k=>{
+    const tm = k.stats?.time || {};
+    rows.push([
+      k.id, k.name||'', (k.moves||[]).length, (k.enabled!==false)?1:0,
+      k.stats?.attempts||0, k.stats?.solved||0, k.stats?.mistakes||0,
+      (typeof tm.bestMs==='number'?tm.bestMs:''), (typeof tm.avgMs==='number'?Math.round(tm.avgMs):''), (k.tags||[]).join('|')
+    ]);
+  });
+  const blob = new Blob([toCsv(rows)], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=(pk.replaceAll('/','__')||'folder')+'_stats.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1200);
+});
+
+/** Finalize */
+onReady(()=> RT.bumpTitle('v17') );
+})();
+</script>
+<script>
+(function(){
+  // Hard-disable any coach entry points safely (idempotent)
+  try{
+    window.openCoach = function(){ alert('コーチ機能は廃止されました。'); };
+    window.showCoachMessage = function(){};
+  }catch(_){}
+
+  // Defensive: update "覚えた棋譜（ユニーク）" by sig after counts update (idempotent)
+  if(!window._v17_unique_sig_patch){
+    function _v17_updateUniqueBySig(){
       try{
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
+        var set = new Set();
+        var byPath = (window.store && window.store.kifuByPath) ? window.store.kifuByPath : {};
+        Object.keys(byPath).forEach(function(p){
+          (byPath[p]||[]).forEach(function(k){
+            if(k && k.sig && ((k.stats && k.stats.solved>0) || (k.cleared===true))) set.add(k.sig);
+          });
+        });
+        var el = document.getElementById('uniqueSolved'); if(el) el.textContent = String(set.size);
       }catch(_){}
-      window.resetBoardToCurrent();
-      return false;
-    }, {capture:true});
+    }
+    if(typeof window.updateCountsAndPath === 'function'){
+      var orig = window.updateCountsAndPath;
+      window.updateCountsAndPath = function(){ orig(); _v17_updateUniqueBySig(); };
+    }else{
+      document.addEventListener('DOMContentLoaded', _v17_updateUniqueBySig, { once: true });
+      setTimeout(_v17_updateUniqueBySig, 500);
+    }
+    window._v17_unique_sig_patch = true;
   }
 
-  // --- Keep the celebrate message strictly to '再現手数'と'誤答' ---
-  if(typeof window.showCelebrate === 'function'){
-    const _origCelebrate = window.showCelebrate;
-    window.showCelebrate = function(total, mistakes){
-      _origCelebrate(total, mistakes);
-      const m = document.getElementById('celebrateMsg');
-      if(m) m.textContent = `再現手数：${total}　誤答：${mistakes} 回`;
-      // Ensure only the intended blocks remain visible
-      const celeb = document.getElementById('celebrate');
-      if(celeb){
-        // Remove any accidental extra info sections if present
-        celeb.querySelectorAll('.extra,.stats,.hints,.links').forEach(n=> n.remove());
+  // Safer localStorage access (fallback to in-memory store if blocked)
+  if(!window._v17_safe_ls){
+    (function(){
+      try{
+        var k='__ls_test__'; localStorage.setItem(k,'1'); localStorage.removeItem(k);
+      }catch(e){
+        console.warn('localStorage unavailable; falling back to memory store.');
+        var mem = {};
+        window.localStorage = {
+          getItem: function(key){ return mem.hasOwnProperty(key) ? mem[key] : null; },
+          setItem: function(key, val){ mem[String(key)] = String(val); },
+          removeItem: function(key){ delete mem[String(key)]; }
+        };
       }
-    };
+    })();
+    window._v17_safe_ls = true;
   }
 })();
 </script>
-<!-- ==== End Patch ==== -->
-
-
-  <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js').catch(function(e){ console.warn('SW register failed', e); });
-    });
+<style id="patch-v18-rec-ordering">
+/* v18 fixes: recorder panel positioning and click-through */
+.rec-layer{
+  position: fixed !important;
+  top: 16px !important;
+  left: 16px !important;
+  right: auto !important;
+  bottom: auto !important;
+  background: none !important;
+  pointer-events: none !important;
+  display: none;
+  z-index: 1000 !important;
+}
+.rec-layer .panel{
+  width: min(420px, 42vw) !important;
+  max-height: 80vh !important;
+  overflow: auto !important;
+  pointer-events: auto !important;
+}
+@media (max-width: 900px){
+  .rec-layer{
+    top: auto !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: 12px !important;
   }
-  </script>
-</body></html>
+  .rec-layer .panel{
+    width: auto !important;
+  }
+}
+</style>
+<script id="patch-v18-keyboard">
+/* v18 keyboard fixes
+   - Reserve A–H for board coordinates: block global shortcuts when letter typed as coordinate (capture-phase).
+   - ESC cancels mid coordinate input (ensures overlay hidden).
+   - Remap shortcuts off A–H:
+       * K: open kifu list (was G)
+       * Q: toggle MCQ overlay (was C)
+   - Keep original bindings as fallback with modifiers (Ctrl+G still opens list).
+*/
+(function(){
+  function isTypingField(el){
+    const t = (el && el.tagName) ? el.tagName.toLowerCase() : '';
+    return t==='input' || t==='textarea' || t==='select' || el?.isContentEditable;
+  }
+
+  // Capture-phase guard: swallow A–H / 1–8 when used for coordinate typing
+  window.addEventListener('keydown', function(e){
+    try{
+      if(!window.training) return;
+      if(isTypingField(e.target)) return;
+      // cancel coordinate buffer with ESC by hiding overlay; original handler will also see this and do nothing
+      if(e.key === 'Escape'){
+        const o = document.getElementById('kbdOverlay'); if(o){ o.style.display='none'; }
+        // Best-effort: mark cancelled to avoid any downstream handling
+        window.__kbdEscCancelledAt = Date.now();
+        e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+        return; // Do not preventDefault so other uses of ESC still work (modals have their own listeners)
+      }
+      const isCoordLetter = /^[a-hA-H]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey;
+      const isCoordDigit  = /^[1-8]$/.test(e.key);
+      if(isCoordLetter || isCoordDigit){
+        // Let original coordinate handler run (it was also registered in capture-phase before this),
+        // but stop the event from bubbling to global shortcut handlers.
+        e.preventDefault();
+        e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+        // Note: we intentionally do NOT return false; the earlier capture handler already handled UI.
+      }
+
+      // Block legacy bare 'g' and 'c' shortcuts during training to avoid conflict with coordinates
+      if((e.key==='g' || e.key==='G' || e.key==='c' || e.key==='C') && !e.ctrlKey && !e.metaKey && !e.altKey){
+        e.preventDefault();
+        e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      }
+    }catch(_){}
+  }, {capture:true});
+
+  // New non-conflicting shortcuts (bubble-phase OK)
+  window.addEventListener('keydown', function(e){
+    try{
+      if(isTypingField(e.target)) return;
+      // Open kifu list: K (or Ctrl+G for people used to the old key)
+      if((e.key==='k' || e.key==='K') && typeof window.openKifuModal === 'function'){
+        e.preventDefault(); window.openKifuModal(); return;
+      }
+      if((e.key==='g' || e.key==='G') && (e.ctrlKey || e.metaKey) && typeof window.openKifuModal === 'function'){
+        e.preventDefault(); window.openKifuModal(); return;
+      }
+      // Toggle MCQ overlay: Q (or Ctrl+C)
+      if((e.key==='q' || e.key==='Q') && typeof window.OPT === 'function' && typeof window.SETOPT === 'function'){
+        e.preventDefault();
+        try{
+          const v = !window.OPT('mcq', false);
+          window.SETOPT('mcq', v);
+          if(typeof window.updateMCQ === 'function') window.updateMCQ();
+        }catch(_){}
+        return;
+      }
+      if((e.key==='c' || e.key==='C') && (e.ctrlKey || e.metaKey) && typeof window.OPT === 'function'){
+        e.preventDefault();
+        try{
+          const v = !window.OPT('mcq', false);
+          window.SETOPT('mcq', v);
+          if(typeof window.updateMCQ === 'function') window.updateMCQ();
+        }catch(_){}
+        return;
+      }
+    }catch(_){}
+  });
+})();
+</script>
+<!-- ===== v18.1 Keyboard & UX fixes (2025-10-23) ===== -->
+<script>
+(function(){
+  function isTypingField(el){
+    const t = (el && el.tagName) ? el.tagName.toLowerCase() : '';
+    return t==='input' || t==='textarea' || t==='select' || (el && el.isContentEditable);
+  }
+
+  // Remove the inline legacy tip text that mentions old shortcuts.
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.small.muted').forEach(function(el){
+      const tx = (el.textContent || '').trim();
+      if(/ショートカット：T=白視点/.test(tx) || //.test(tx)){
+        el.remove();
+      }
+    });
+  });
+
+  // Override the "ショートカット一覧" help to show the complete, updated list.
+  function showShortcutsHelp(){
+    alert([
+      'ショートカット：',
+      '  N：次の問題を出題',
+      '  R：今の問題をもう一度',
+      '  L：期待手ハイライトの切替',
+      '  M：マス内座標の切替',
+      '  S：効果音の切替',
+      '  T：白視点の切替',
+      '  V：読み上げの切替',
+      '  J：両方を自分で打つの切替',
+                  '  A〜H→1〜8：座標入力（例：C3）',
+      '  L：棋譜一覧を開く',
+      '  ← / →：確認モードで1手戻る／進む',
+      '  Esc：祝福画面／一覧を閉じる、確認中は「暗記再開」と同じ'
+    ].join('\\n'));
+  }
+  // Capture-phase override so older listeners won't fire.
+  document.addEventListener('click', function(e){
+    const t = e.target;
+    if(t && t.classList && t.classList.contains('inline-help') && /ショートカット一覧/.test(t.textContent||'')){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      showShortcutsHelp();
+    }
+  }, true);
+
+  // L：いつでも棋譜一覧を開く（入力中は無効）
+  window.addEventListener('keydown', function(e){
+    if(isTypingField(e.target)) return;
+    if(e.key==='l' || e.key==='L'){
+      e.preventDefault();
+      try{
+        if(typeof window.openKifuModal === 'function'){ window.openKifuModal(); }
+        else if(typeof window.openKifuList === 'function'){ window.openKifuList(); }
+        else {
+          var btn = document.getElementById('openListBtn') || document.getElementById('kifuListBtn');
+          if(btn) btn.click();
+        }
+      }catch(_){}
+    }
+  }, true);
+
+  // J：両方を自分で打つ の切替（B は使わない）
+  window.addEventListener('keydown', function(e){
+    if(isTypingField(e.target)) return;
+    if(e.key==='j' || e.key==='J'){
+      e.preventDefault();
+      try{
+        var el = (typeof window.toggleSelfBothEl !== 'undefined' && window.toggleSelfBothEl)
+                  ? window.toggleSelfBothEl
+                  : document.getElementById('toggleSelfBoth');
+        if(el){
+          el.checked = !el.checked;
+          el.dispatchEvent(new Event('change'));
+        }else if(typeof window.toggleSelfBoth === 'function'){
+          window.toggleSelfBoth();
+        }
+      }catch(_){}
+    }
+  }, true);
+
+  // 確認中（inspectMode）に Esc で「暗記再開」と同じ処理
+  window.addEventListener('keydown', function(e){
+    try{
+      if(e.key==='Escape' && window.inspectMode){
+        e.preventDefault();
+        if(typeof window.exitInspectResume === 'function'){
+          window.exitInspectResume();
+        }else{
+          var btn = document.getElementById('resumeBtn');
+          if(btn) btn.click();
+        }
+      }
+    }catch(_){}
+  }, true);
+
+  // 「カレンダー」「フリーズ」が確実に開くようにフォールバックを配線
+  function ensureCalendarWired(){
+    var btn = document.getElementById('calendarBtn');
+    if(btn && !btn._wired){
+      btn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        try{
+          if(typeof window.openCalendar === 'function'){
+            window.openCalendar();
+          }else if(typeof window.ensureCalModal === 'function'){
+            window.ensureCalModal();
+            var m = document.getElementById('calendarModal');
+            if(m) m.style.display='flex';
+          }
+        }catch(_){}
+      });
+      btn._wired = true;
+    }
+  }
+  function ensureFreezeWired(){
+    var btn = document.getElementById('freezeBtn');
+    if(btn && !btn._wired){
+      btn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        try{
+          if(typeof window.openFreeze === 'function'){
+            window.openFreeze();
+          }else if(typeof window.ensureFreezeModal === 'function'){
+            window.ensureFreezeModal();
+            var m = document.getElementById('freezeModal');
+            if(m) m.style.display='flex';
+          }
+        }catch(_){}
+      });
+      btn._wired = true;
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    ensureCalendarWired();
+    ensureFreezeWired();
+  });
+})();
+</script>
+<!-- ===== storage-compress patch (disabled: 2025-10-24 fix) ===== -->
+<script>
+// This patch has been disabled because the embedded LZString snippet was corrupted
+// and caused syntax errors in some browsers. The app falls back to the default
+// JSON-based saveStore()/loadStore() defined earlier.
+</script>
+<!-- ===== v19 Addons by ChatGPT (2025-10-23) ===== -->
+<style>
+/* v19: solved list chips + recorder overlay rotation guard */
+#boardWrap.rot180 .rec-layer,
+#boardWrap.rot180 #recorderOverlay,
+#boardWrap.rot180 #recorderWindow { transform: none !important; }
+
+/* Make solved list look like chips if not already */
+#solvedList.chips .chip{ margin: 2px 4px 2px 0; }
+</style>
+<script>
+// ===== v19 Addons by ChatGPT (2025-10-23) =====
+(function(){
+  'use strict';
+
+  // ---------- 1) 暗記一覧（クリアリスト）に「正解カウント」を表示 ----------
+  function _v19_renderSolvedList_override(){
+    try{
+      const el = document.getElementById('solvedList');
+      if(!el) return;
+      el.classList.add('chips'); // chip スタイルを有効に
+      const pk = (typeof window.currentPath==='function') ? currentPath() : '';
+      const arr = (typeof window.getArrayByPath==='function') ? getArrayByPath(pk) : ((window.store && store.kifuByPath && store.kifuByPath[pk]) ? store.kifuByPath[pk] : []);
+      const items = [];
+      (arr||[]).forEach((k, idx)=>{
+        try{
+          const cleared = (typeof window.isCleared==='function') ? isCleared(k) : !!(k && k.stats && (k.stats.solved||0)>0);
+          if(cleared){
+            const n = (typeof k._idx==='number' ? k._idx+1 : idx+1);
+            const cnt = (k && k.stats && k.stats.solved)|0;
+            items.push({ n, cnt });
+          }
+        }catch(_){}
+      });
+      el.innerHTML = '';
+      if(!items.length){
+        el.textContent = '（まだ正解に到達した棋譜はありません）';
+      }else{
+        items.sort((a,b)=> a.n - b.n);
+        items.forEach(it=>{
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.textContent = '棋譜' + it.n + '｜✓ ' + it.cnt + ' 回';
+          el.appendChild(chip);
+        });
+      }
+
+      // ユニーク達成数（sigベース）を再集計してヘッダの表示を更新
+      try{
+        const set = new Set();
+        const all = (window.store && store.kifuByPath) ? store.kifuByPath : {};
+        Object.values(all).forEach(list=> (list||[]).forEach(k=>{
+          try{
+            const ok = !!(k && k.stats && (k.stats.solved||0)>0);
+            const sig = k && (k.sig || (k.moves ? canonicalSignature(k.moves) : null));
+            if(ok && sig) set.add(sig);
+}catch(_){}
+        }));
+        const uEl = document.getElementById('uniqueSolved');
+        if(uEl) uEl.textContent = String(set.size);
+      }catch(_){}
+    }catch(_){
+      // fall back to original implementation if anything goes wrong
+      try{ if(typeof window._v19_orig_renderSolvedList==='function') _v19_orig_renderSolvedList(); }catch(_){}
+    }
+  }
+
+  if(typeof window.renderSolvedList==='function' && !window._v19_renderSolvedList_patched){
+    window._v19_orig_renderSolvedList = window.renderSolvedList;
+    window.renderSolvedList = _v19_renderSolvedList_override;
+    window._v19_renderSolvedList_patched = true;
+  }
+
+  // 初期表示も整える
+  try{ _v19_renderSolvedList_override(); }catch(_){}
+
+  // ---------- 2) 実績：ユニーク達成（覚えた棋譜の数）を追加 ----------
+  const K14 = (k)=> (window.STORE_PREFIX || '') + 'opt14_' + k;
+  function getAch14(){ try{ const v=localStorage.getItem(K14('ach')); return v?JSON.parse(v):{}; }catch(_){ return {}; } }
+  function setAch14(m){ try{ localStorage.setItem(K14('ach'), JSON.stringify(m||{})); }catch(_){ } }
+  function uniqueSolvedCount(){
+  try{
+    const all = (window.store && store.kifuByPath) ? store.kifuByPath : {};
+    const set = new Set();
+    Object.values(all).forEach(list => (list||[]).forEach(k => {
+      try{
+        const ok = !!(k && k.stats && (k.stats.solved||0)>0); // ノーミスクリアのみ
+        const sig = k && (k.sig || (k.moves ? canonicalSignature(k.moves) : null));
+        if(ok && sig) set.add(sig);
+      }catch(_){ }
+    }));
+    return set.size;
+  }catch(_){ return 0; }
+};
+      const set = new Set();
+      Object.values(all).forEach(list => (list||[]).forEach(k => {
+        try{
+          const ok = !!(k && k.stats && (k.stats.solved||0)>0);
+            const sig = k && (k.sig || (k.moves ? canonicalSignature(k.moves) : null));
+            if(ok && sig) set.add(sig);
+}catch(_){}
+      }));
+      return set.size;
+    }catch(_){ return 0; }
+  }
+  const _v19_uniqueTiers = [
+    [10,'UNQ_10','駆け出し暗記人'],
+    [30,'UNQ_30','暗記人'],
+    [50,'UNQ_50','暗記職人'],
+    [100,'UNQ_100','暗記名人'],
+    [200,'UNQ_200','暗記達人'],
+    [300,'UNQ_300','暗記仙人'],
+    [400,'UNQ_400','暗記星人'],
+    [500,'UNQ_500','暗記神様']
+  ];
+  function unlockUniqueTier(key, title){
+    const m = getAch14();
+    if(m[key]) return false;
+    m[key] = { at: new Date().toISOString() };
+    setAch14(m);
+    try{ if(typeof window.showToast==='function') showToast('実績解除：' + title); }catch(_){}
+    try{ if(typeof window.speakJa==='function') speakJa('実績解除'); }catch(_){}
+    return true;
+  }
+  function awardUniqueIfMet(){
+    const u = uniqueSolvedCount();
+    _v19_uniqueTiers.forEach(([n,key,title])=>{ if(u>=n) unlockUniqueTier(key, title); });
+  }
+  // クリア時にユニーク実績も評価（ノーミス時のみ）
+  if(typeof window.showCelebrate==='function' && !window._v19_ach_hooked){
+    const orig = window.showCelebrate;
+    window.showCelebrate = function(total, mistakes){
+      const out = orig(total, mistakes);
+      try{ if(mistakes===0){
+        try{
+          const pk = currentPath();
+          const arr = (store && store.kifuByPath && store.kifuByPath[pk]) ? store.kifuByPath[pk] : [];
+          const k = arr.find(x=>x.id===currentKifuId);
+          const sig = k && (k.sig || (k.moves ? canonicalSignature(k.moves) : null));
+          if(sig){ const set = new Set(store.learnedOnceSigs||[]); set.add(sig); store.learnedOnceSigs = Array.from(set); saveStore(store); }
+        }catch(_){ }
+        awardUniqueIfMet();
+      } }catch(_){}
+      return out;
+    };
+    window._v19_ach_hooked = true;
+  }
+  // 実績モーダルにユニーク段位を追記
+  if(typeof window.openAchievements==='function' && !window._v19_ach_ui){
+    const origOpen = window.openAchievements;
+    window.openAchievements = function(){
+      origOpen();
+      try{
+        const body = document.getElementById('achBody'); if(!body) return;
+        if(document.getElementById('unqBlock')) return;
+        const owned = getAch14();
+        const block = document.createElement('div'); block.id='unqBlock';
+        block.style.gridColumn = '1 / -1';
+        const hdr = document.createElement('div'); hdr.className='small muted'; hdr.textContent='— 覚えた棋譜（ユニーク）ランク —';
+        block.appendChild(hdr);
+        const grid = document.createElement('div'); grid.style.display='grid'; grid.style.gridTemplateColumns='repeat(auto-fill,minmax(200px,1fr))'; grid.style.gap='10px';
+        _v19_uniqueTiers.forEach(([n,key,title])=>{
+          const card = document.createElement('div'); card.className='achi-card' + (owned[key]?'':' locked');
+          const t = document.createElement('div'); t.className='achi-title'; t.textContent = '📚 ' + title;
+          const d = document.createElement('div'); d.className='achi-desc';
+          d.textContent = '覚えた棋譜（ユニーク）：' + n + ' 以上' + (owned[key]? ('｜解除日：' + (owned[key].at||'')) : '');
+          card.appendChild(t); card.appendChild(d); grid.appendChild(card);
+        });
+        const u = uniqueSolvedCount();
+        const prog = document.createElement('div'); prog.className='small muted'; prog.textContent = '現在のユニーク達成数：' + u;
+        block.appendChild(grid); block.appendChild(prog);
+        body.appendChild(block);
+      }catch(_){}
+    };
+    window._v19_ach_ui = true;
+  }
+
+  // ---------- 3) 「録画」の設定ウィンドウが回転しないように修正 ----------
+  function relocateRecLayer(){
+    try{
+      const wrap = document.getElementById('boardWrap');
+      const layer = document.querySelector('.rec-layer');
+      if(layer && wrap && layer.parentElement === wrap){
+        document.body.appendChild(layer);
+        layer.style.position = 'fixed';
+        layer.style.transform = 'none';
+        layer.style.zIndex = '1000';
+      }
+    }catch(_){}
+  }
+  // 初回＆今後の生成にも追従
+  try{ relocateRecLayer(); }catch(_){}
+  try{
+    const mo = new MutationObserver(()=> relocateRecLayer());
+    mo.observe(document.body, { childList:true, subtree:true });
+  }catch(_){}
+
+})(); // end v19
+</script>
+<!-- ==== Patch: Remove Global Heatmap + Add Clear Buttons (2025-10-24) ==== -->
+<script>
+(function(){
+  try {
+    // --- Abolish Global Heatmap feature entirely ---
+    // Force option off and delete any stored global data.
+    try {
+      if (typeof SETOPT === 'function') { SETOPT('globalHeat', false); }
+    } catch(_) {}
+    try {
+      if (typeof STORE_PREFIX !== 'undefined' && window.localStorage) {
+        localStorage.removeItem(STORE_PREFIX + 'opt11_globalMistake');
+      }
+    } catch(_) {}
+
+    // Neutralize any global-heat related functions if present.
+    try { window.getGlobalMap = function(){ return {}; }; } catch(_) {}
+    try { window.setGlobalMap = function(_){ /* removed */ }; } catch(_) {}
+    try { window.updateGlobalHeatUI = function(){ /* removed */ }; } catch(_) {}
+    try { window.drawGlobalHeat = function(){ /* removed */ }; } catch(_) {}
+    // Avoid any previous "flashX" wrappers from logging to global map by disabling the marker.
+    try { window._v11_flash_patched = true; } catch(_) {}
+
+    // Remove Global Heat toggle UI if it exists.
+    try {
+      var chk = document.getElementById('globalHeatChk');
+      if (chk) {
+        var label = chk.closest('label') || chk.parentElement;
+        if (label && label.remove) label.remove();
+        else chk.remove();
+      }
+    } catch(_) {}
+
+    // --- Add "clear counts" buttons for per-kifu heatmap ---
+    function clearCurrentKifuMistakes() {
+      try{
+        if (typeof getCurrentKifuObj !== 'function') { alert('現棋譜の取得に失敗しました。'); return; }
+        var k = getCurrentKifuObj();
+        if (!k) { alert('現棋譜が見つかりません。'); return; }
+        delete k.mistakeCounts;
+        delete k.mistakeByTurn;
+        if (typeof saveStore === 'function') saveStore(store);
+        if (typeof updateHeatOverlay === 'function') updateHeatOverlay();
+        alert('現棋譜のカウント情報を全て消去しました。');
+      }catch(e){
+        console.warn(e);
+        alert('現棋譜のカウント消去でエラーが発生しました。');
+      }
+    }
+
+    function clearAllKifuMistakes() {
+      try{
+        if (!window.store || !store.kifuByPath) { alert('データストアが見つかりません。'); return; }
+        Object.keys(store.kifuByPath).forEach(function(pathKey){
+          var arr = store.kifuByPath[pathKey] || [];
+          arr.forEach(function(k){
+            if (k) { delete k.mistakeCounts; delete k.mistakeByTurn; }
+          });
+        });
+        if (typeof saveStore === 'function') saveStore(store);
+        if (typeof updateHeatOverlay === 'function') updateHeatOverlay();
+        // ついでにグローバルヒートの残骸も掃除
+        try {
+          if (typeof STORE_PREFIX !== 'undefined' && window.localStorage) {
+            localStorage.removeItem(STORE_PREFIX + 'opt11_globalMistake');
+          }
+        } catch(_) {}
+        alert('すべての棋譜のカウント情報を全て消去しました。');
+      }catch(e){
+        console.warn(e);
+        alert('全棋譜のカウント消去でエラーが発生しました。');
+      }
+    }
+
+    // Insert buttons next to the existing per-kifu heatmap toggle.
+    try{
+      var heatChk = document.getElementById('heatChk');
+      if (heatChk) {
+        var container = heatChk.closest('.field') || (heatChk.parentElement && heatChk.parentElement.parentElement) || null;
+        if (container && !document.getElementById('clearCurrKifuBtn')) {
+          var spacer1 = document.createTextNode('　');
+          var btn1 = document.createElement('button');
+          btn1.id = 'clearCurrKifuBtn';
+          btn1.type = 'button';
+          btn1.className = 'small';
+          btn1.textContent = '現棋譜のカウントを全消去';
+
+          var spacer2 = document.createTextNode(' ');
+          var btn2 = document.createElement('button');
+          btn2.id = 'clearAllKifuBtn';
+          btn2.type = 'button';
+          btn2.className = 'small';
+          btn2.textContent = 'すべての棋譜のカウントを全消去';
+
+          container.appendChild(spacer1);
+          container.appendChild(btn1);
+          container.appendChild(spacer2);
+          container.appendChild(btn2);
+
+          btn1.addEventListener('click', function(ev){ ev.preventDefault(); clearCurrentKifuMistakes(); });
+          btn2.addEventListener('click', function(ev){ ev.preventDefault(); 
+            if (confirm('本当に全ての棋譜のカウントを消去しますか？この操作は元に戻せません。')) {
+              clearAllKifuMistakes();
+            }
+          });
+        }
+      }
+    }catch(e){ console.warn(e); }
+  } catch(e) { console.warn('Patch error', e); }
+})();
+</script>
+<!-- ==== Patch: UI fixes (2025-10-24) ==== -->
+<script id="patch-2025-10-24-ui-fixes">
+(function(){
+  try {
+    // 1) Ensure bottom-left keyboard typing overlay exists and is styled.
+    (function ensureKbdOverlay(){
+      var o = document.getElementById('kbdOverlay');
+      if(!o){
+        o = document.createElement('div');
+        o.id = 'kbdOverlay';
+        o.style.position = 'fixed';
+        o.style.left = '8px';
+        o.style.bottom = '8px';
+        o.style.padding = '4px 8px';
+        o.style.background = 'rgba(0,0,0,0.65)';
+        o.style.color = '#fff';
+        o.style.borderRadius = '4px';
+        o.style.fontSize = '12px';
+        o.style.lineHeight = '1.4';
+        o.style.whiteSpace = 'pre';
+        o.style.zIndex = '9999';
+        o.style.pointerEvents = 'none';
+        o.style.display = 'none';
+        document.body.appendChild(o);
+      }
+    })();
+
+    // 2) Move "対称変換：" + selector to directly under "すべての棋譜のカウントを全消去"
+    ;(function fixSymPlacement(){
+      var tries = 0;
+      function attempt(){
+        tries++;
+        var btn2 = document.getElementById('clearAllKifuBtn'); // 「すべての棋譜のカウントを全消去」
+        var symSel = document.getElementById('symmetrySel');
+        // try to locate the symmetry label within the same field
+        var symLbl = null;
+        if(symSel){
+          var root = symSel.closest('.field') || symSel.parentNode || document;
+          var labels = root.querySelectorAll('label');
+          for(var i=0;i<labels.length;i++){
+            var t = (labels[i].textContent||'').replace(/\s+/g,'').trim();
+            if(t.indexOf('対称変換') !== -1){ symLbl = labels[i]; break; }
+          }
+        }
+        if(btn2 && symSel && symLbl){
+          // Remove from current position
+          try { if(symLbl.parentNode) symLbl.parentNode.removeChild(symLbl); } catch(_) {}
+          try { if(symSel.parentNode) symSel.parentNode.removeChild(symSel); } catch(_) {}
+          // Wrap to force a new line under the clear-all button (flex row wrap container)
+          var wrap = document.createElement('div');
+          wrap.className = 'symmetry-wrap';
+          wrap.style.flexBasis = '100%';
+          wrap.style.marginTop = '6px';
+          wrap.appendChild(symLbl);
+          wrap.appendChild(symSel);
+          btn2.insertAdjacentElement('afterend', wrap);
+          return true;
+        }
+        if(tries < 60){ setTimeout(attempt, 250); }
+        return false;
+      }
+      attempt();
+    })();
+  } catch(e) { console.warn('patch-2025-10-24-ui-fixes error', e); }
+})();
+</script>
+<script id="v20-kbdpos-freeze-calfix">
+(function(){
+  'use strict';
+
+  // ---------- helpers (local to this patch) ----------
+  function byId(id){ return document.getElementById(id); }
+  function dayKey(d){
+    var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+dd;
+  }
+  function isoWeekKey(dt){
+    var d = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
+    var dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+    return d.getUTCFullYear() + '-W' + String(weekNo).padStart(2,'0');
+  }
+  function getLogsPatched(){
+    try{ return JSON.parse(localStorage.getItem((typeof STORE_PREFIX!=='undefined'?STORE_PREFIX:'reversi_trainer_') + 'opt10_logs')||'[]'); }
+    catch(_){ return []; }
+  }
+  function K15(k){ return (typeof STORE_PREFIX!=='undefined'?STORE_PREFIX:'reversi_trainer_') + 'opt15_' + k; }
+  function jget(k, d){ try{ var v = localStorage.getItem(K15(k)); return v==null?d:JSON.parse(v); }catch(_){ return d; } }
+  function jset(k, v){ try{ localStorage.setItem(K15(k), JSON.stringify(v)); }catch(_){ } }
+
+  // ---------- 1) Keyboard overlay: ensure exists & show at board lower-left ----------
+  function ensureKbdOverlay(){
+    var wrap = byId('boardWrap');
+    if(!wrap) return;
+    var o = byId('kbdOverlay');
+    if(!o){
+      o = document.createElement('div');
+      o.id = 'kbdOverlay';
+      o.className = 'kbd-overlay';
+      o.setAttribute('aria-live','polite');
+      wrap.appendChild(o);
+    }else{
+      // If it exists but is NOT under boardWrap (older patch), move it and reset inline positioning
+      if(o.parentElement !== wrap){
+        wrap.appendChild(o);
+      }
+      // reset any inline positioning from old patch
+      o.style.position = '';
+      o.style.left = '';
+      o.style.bottom = '';
+      o.style.right = '';
+      o.style.top = '';
+      o.style.zIndex = '';
+      o.style.pointerEvents = 'none';
+      // keep display hidden until needed
+      o.style.display = 'none';
+      if(o.className.indexOf('kbd-overlay') === -1){
+        o.className = (o.className ? o.className + ' ' : '') + 'kbd-overlay';
+      }
+    }
+  }
+  function hookKbdOverlay(){
+    if(window._v20_kbdHooked) return;
+    window._v20_kbdHooked = true;
+    var buf = '';
+    function show(txt){
+      var o = byId('kbdOverlay'); if(!o) return;
+      o.textContent = txt; o.style.display = 'inline-block';
+    }
+    function hide(){ var o=byId('kbdOverlay'); if(o) o.style.display='none'; }
+
+    window.addEventListener('keydown', function(e){
+      try{
+        var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+        if(tag==='input' || tag==='textarea' || tag==='select' || e.isComposing) return;
+        var k = e.key;
+        if(/^[a-hA-H]$/.test(k)){
+          buf = k.toUpperCase();
+          show('入力: ' + buf + ' _');
+        }else if(buf && /^[1-8]$/.test(k)){
+          var coord = buf + k;
+          show('入力: ' + coord);
+          buf = '';
+          setTimeout(hide, 1200);
+        }else if(k==='Escape'){
+          buf = ''; hide();
+        }
+      }catch(_){}
+    }, true);
+  }
+
+  // ---------- 2) Calendar & Freeze buttons (robust) ----------
+  function ensureButtons(){
+    var topbar = document.querySelector('.topbar');
+    if(!topbar) return;
+    var holder = document.getElementById('moreWrap') || topbar;
+
+    function attach(id, text, onClick){
+      var b = byId(id);
+      if(!b){
+        b = document.createElement('button');
+        b.id = id; b.className = 'ghost tiny'; b.textContent = text;
+        holder.appendChild(b);
+      }
+      if(!b._v20_click){
+        b.addEventListener('click', function(ev){ ev.preventDefault(); onClick(); });
+        b._v20_click = true;
+      }
+    }
+
+    attach('calendarBtn', 'カレンダー', openCalendarPatched);
+    attach('freezeBtn', 'フリーズ', openFreezePatched);
+  }
+
+  // ---------- 2-a) Calendar (patched fallback) ----------
+  function ensureCalendarModalPatched(){
+    if(byId('calendarModal')) return;
+    var modal = document.createElement('div');
+    modal.className = 'modal cal-modal'; modal.id = 'calendarModal';
+    modal.innerHTML = ''
+      + '<div class="window">'
+      + '  <header><h3>カレンダー</h3><button class="ghost" id="calClose">閉じる</button></header>'
+      + '  <div class="body">'
+      + '    <div class="small muted">直近20週間の達成状況（1日1回以上「正解」でカウント）。</div>'
+      + '    <div id="calGrid" class="grid" style="display:grid; grid-template-columns:auto repeat(7, 18px); gap:4px; align-items:center; font-size:12px; margin-top:8px;"></div>'
+      + '  </div>'
+      + '  <div class="footer"><span class="small muted">※ ローカル保存の試行ログから集計</span></div>'
+      + '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e){ if(e.target===modal) modal.style.display='none'; });
+    modal.querySelector('#calClose').addEventListener('click', function(){ modal.style.display='none'; });
+  }
+  function renderCalendarGridPatched(){
+    var grid = byId('calGrid'); if(!grid) return;
+    var count = Object.create(null);
+    try{
+      var logs = getLogsPatched().filter(function(r){ return r && (r.solved || r.mistakes===0); });
+      logs.forEach(function(r){
+        if(r && r.timestamp){
+          var dd = String(r.timestamp).slice(0,10);
+          count[dd] = (count[dd]||0) + 1;
+        }
+      });
+      (jget('freezeDays', [])||[]).forEach(function(dd){ count[dd] = (count[dd]||0) + 1; });
+    }catch(_){}
+
+    grid.innerHTML = '';
+    var today = new Date();
+    var start = new Date(today); start.setDate(today.getDate() - 7*19);
+    var wd = (start.getDay()||7); start.setDate(start.getDate() - (wd-1)); // Monday align
+
+    for(var week=0; week<20; week++){
+      var ref = new Date(start); ref.setDate(start.getDate() + week*7);
+      var weekLabel = document.createElement('div');
+      weekLabel.className='cal-week';
+      weekLabel.textContent = isoWeekKey(ref).replace('W','週');
+      grid.appendChild(weekLabel);
+      for(var d=0; d<7; d++){
+        var dt = new Date(ref); dt.setDate(ref.getDate()+d);
+        var cell = document.createElement('div'); cell.className='cal-cell';
+        if(dt > today){ cell.style.opacity='.3'; grid.appendChild(cell); continue; }
+        var key = dayKey(dt);
+        var n = count[key]||0;
+        var color = '#e2e8f0';
+        if(n>=4) color = '#6366f1';
+        else if(n===3) color = '#818cf8';
+        else if(n===2) color = '#a5b4fc';
+        else if(n===1) color = '#c7d2fe';
+        cell.style.width='18px'; cell.style.height='18px'; cell.style.borderRadius='3px'; cell.style.background=color;
+        cell.title = key + '：' + n + '件';
+        grid.appendChild(cell);
+      }
+    }
+  }
+  function openCalendarPatched(){
+    try{ if(typeof window.openCalendar === 'function'){ window.openCalendar(); return; } }catch(_){}
+    ensureCalendarModalPatched();
+    renderCalendarGridPatched();
+    var m = byId('calendarModal'); if(m) m.style.display='flex';
+  }
+
+  // ---------- 2-b) Freeze (patched fallback) ----------
+  function ensureFreezeModalPatched(){
+    if(byId('freezeModal')) return;
+    var modal = document.createElement('div'); modal.className='modal freeze-modal'; modal.id='freezeModal';
+    modal.innerHTML = ''
+      + '<div class="window">'
+      + '  <header><h3>ストリーク・フリーズ</h3><button class="ghost" id="freezeClose">閉じる</button></header>'
+      + '  <div class="body">'
+      + '    <div class="field"><div class="small muted">週に1回まで「練習した日」として扱う救済機能です。</div></div>'
+      + '    <div class="field"><div id="freezeStatus" class="challenge-meta">—</div></div>'
+      + '    <div class="row wrap">'
+      + '      <button class="ghost" id="freezeYesterdayBtn">前日をフリーズ</button>'
+      + '      <button class="ghost" id="freezeTodayBtn">今日をフリーズ</button>'
+      + '    </div>'
+      + '  </div>'
+      + '  <div class="footer"><span class="small muted">※ ローカルに保存されます</span></div>'
+      + '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e){ if(e.target===modal) modal.style.display='none'; });
+    modal.querySelector('#freezeClose').addEventListener('click', function(){ modal.style.display='none'; });
+    modal.querySelector('#freezeYesterdayBtn').addEventListener('click', function(){ useFreezePatched(-1); });
+    modal.querySelector('#freezeTodayBtn').addEventListener('click', function(){ useFreezePatched(0); });
+  }
+  function getFreezeDaysPatched(){ return jget('freezeDays', []); }
+  function setFreezeDaysPatched(a){ jset('freezeDays', a||[]); }
+  function weekBudgetKeyPatched(wk){ return 'freezeBudget_'+wk; }
+  function getWeekBudgetPatched(wk){ return jget(weekBudgetKeyPatched(wk), { used:0, limit:1 }); }
+  function setWeekBudgetPatched(wk, obj){ jset(weekBudgetKeyPatched(wk), obj||{used:0,limit:1}); }
+
+  function refreshFreezeUIPatched(){
+    var now = new Date();
+    var wk = isoWeekKey(now);
+    var budget = getWeekBudgetPatched(wk);
+    var days = new Set(getFreezeDaysPatched());
+    var y = new Date(); y.setDate(now.getDate()-1);
+    var status = [
+      '今週のフリーズ使用：' + budget.used + ' / ' + budget.limit,
+      'フリーズ済み日数：' + days.size + '（直近：' + (Array.from(days).sort().slice(-1)[0] || '—') + '）'
+    ].join('　｜　');
+    var el = byId('freezeStatus'); if(el) el.textContent = status;
+
+    var logs = getLogsPatched().filter(function(r){ return r && r.solved; });
+    var solved = new Set(logs.map(function(r){ return String(r.timestamp).slice(0,10); }));
+    var keyY = dayKey(y), keyT = dayKey(now);
+    var byn = byId('freezeYesterdayBtn'), btn = byId('freezeTodayBtn');
+    if(byn){ byn.disabled = solved.has(keyY) || days.has(keyY) || (budget.used>=budget.limit); }
+    if(btn){ btn.disabled = solved.has(keyT) || days.has(keyT) || (budget.used>=budget.limit); }
+  }
+  function useFreezePatched(delta){
+    var dt = new Date(); dt.setDate(dt.getDate() + delta);
+    var key = dayKey(dt);
+    var wk = isoWeekKey(new Date());
+    var budget = getWeekBudgetPatched(wk);
+    if(budget.used >= budget.limit){ alert('今週のフリーズは使い切りました'); return; }
+    var days = new Set(getFreezeDaysPatched());
+    if(days.has(key)){ alert('その日は既にフリーズ済みです'); return; }
+    days.add(key); setFreezeDaysPatched(Array.from(days));
+    budget.used += 1; setWeekBudgetPatched(wk, budget);
+    try{ if(typeof showToast==='function') showToast('フリーズを使いました：' + key); }catch(_){}
+    refreshFreezeUIPatched();
+    try{ if(window._v13_updateStreak) window._v13_updateStreak(); }catch(_){}
+  }
+  function openFreezePatched(){
+    try{ if(typeof window.openFreeze === 'function'){ window.openFreeze(); return; } }catch(_){}
+    ensureFreezeModalPatched();
+    refreshFreezeUIPatched();
+    var m = byId('freezeModal'); if(m) m.style.display='flex';
+  }
+
+  // ---------- init after DOM ready ----------
+  function init(){
+    ensureKbdOverlay();
+    hookKbdOverlay();
+    ensureButtons();
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  }else{
+    init();
+  }
+})();
+</script>
+<script>
+  // PWA service worker registration
+  (function(){
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').catch(function(e){
+          console && console.warn && console.warn('SW registration failed:', e);
+        });
+      });
+    }
+  })();
+</script></body></html>
+<!-- === Final patch: remove MCQ & range-auto, and harden coordinate typing === -->
+<script>
+(function(){
+  try{
+    // Force MCQ off and remove artifacts
+    if (typeof STORE_PREFIX === 'string') {
+      try{ localStorage.removeItem(STORE_PREFIX + 'opt11_mcq'); }catch(_){}
+      try{ localStorage.removeItem(STORE_PREFIX + 'opt_mcq'); }catch(_){}
+    }
+  }catch(_){}
+  try{
+    window.updateMCQ = function(){};  // no-op
+  }catch(_){}
+  try{
+    document.querySelectorAll('#mcqOverlay, .mcq-overlay').forEach(n=> n.remove());
+  }catch(_){}
+
+  // Override any residual "ショートカット一覧" to exclude MCQ.
+  try{
+    window.showShortcutsHelp = function(){
+      alert([
+        'ショートカット：',
+        '  N：次の問題を出題',
+        '  R：今の問題をもう一度',
+        '  L：期待手ハイライトの切替',
+        '  M：マス内座標の切替',
+        '  S：効果音の切替',
+        '  T：白視点の切替',
+        '  V：読み上げの切替',
+        '  J：両方を自分で打つの切替',
+        '  A〜H→1〜8：座標入力（例：C3）',
+        '  ← / →：確認モードで1手戻る／進む',
+        '  Esc：祝福画面／一覧を閉じる、確認中は「暗記再開」と同じ'
+      ].join('\\n'));
+    };
+  }catch(_){}
+
+  // Harden coordinate typing: capture early and dispatch click to the cell.
+  (function(){
+    var buf = '';
+    function resetBuf(){
+      buf='';
+      try{
+        var o=document.getElementById('kbdOverlay'); if(o) o.style.display='none';
+      }catch(_){}
+    }
+    window.addEventListener('keydown', function(e){
+      try{
+        var t = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+        if(t==='input' || t==='textarea' || t==='select' || (e.target && e.target.isContentEditable)) return;
+
+        // A-H
+        if(/^[a-h]$/i.test(e.key)){
+          buf = e.key.toUpperCase();
+          var o=document.getElementById('kbdOverlay');
+          if(o){ o.textContent = '入力: ' + buf + ' _'; o.style.display='inline-block'; }
+          e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+          return;
+        }
+        // 1-8
+        if(/^[1-8]$/.test(e.key) && buf){
+          var coord = buf + e.key;
+          var o=document.getElementById('kbdOverlay'); if(o){ o.textContent = '入力: ' + coord; }
+          var cell = document.querySelector('.cell[data-coord="'+coord+'"]');
+          setTimeout(resetBuf, 600);
+          if(cell){
+            e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+            cell.click();
+          }
+          return;
+        }
+        if(e.key==='Escape'){ resetBuf(); return; }
+        if(e.key==='Backspace'){ resetBuf(); return; }
+      }catch(_){}
+    }, true); // capture to run before bubble handlers
+  })();
+})();
+</script>
