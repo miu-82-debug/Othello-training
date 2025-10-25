@@ -1,27 +1,37 @@
 {
-  "name": "オセロ暗記トレーナー v20_20251024",
-  "short_name": "暗記トレーナー",
-  "start_url": "./",
-"scope": "./",
+  "name": "Othello Trainer",
+  "short_name": "Othello",
+  "description": "Othello/Reversi の盤面トレーナー（PWA対応）",
+  "start_url": "./?source=pwa",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0B8F2F",
-  "theme_color": "#0B8F2F",
+  "background_color": "#0b3d2e",
+  "theme_color": "#0b3d2e",
+  "id": "othello-trainer",
   "icons": [
     {
-      "src": "icon_othello_green-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "icon_othello_green-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "icon_othello_green-maskable.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable any"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
