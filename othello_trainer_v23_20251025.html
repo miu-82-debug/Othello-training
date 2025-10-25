@@ -7429,3 +7429,52 @@ if(!window._v22_20251025_safe_ls){
   })();
 })();
 </script>
+<script>
+/* === Mobile compact patch: board cell size must fit both height AND width === */
+(function(){
+  // 既存の fitBoardToViewport を上書き（なければ定義）
+  var orig = window.fitBoardToViewport || function(){};
+  window.fitBoardToViewport = function(){
+    try{
+      // 上部UIなどの高さを控えめに見積もる
+      var topbar = document.querySelector('.topbar');
+      var topH = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+      var reserved = 54; // 影や余白の概算（既存値を流用）
+
+      var vw = Math.max(320, window.innerWidth);
+      var vh = Math.max(320, window.innerHeight);
+
+      // 既存の「高さ基準」の計算（従来ロジック）
+      var cellByHeight = Math.max(34, Math.min(56, Math.floor((vh - topH - reserved) / 10)));
+
+      // ★新規：横幅基準の計算（軸と隙間も考慮）
+      // 盤面は 8マス, 隙間7本（--gap=2px想定）, 軸（左右に--axis）
+      var style = getComputedStyle(document.documentElement);
+      var axis = parseInt(style.getPropertyValue('--axis')) || 22; // 既定22px
+      var gap  = parseInt(style.getPropertyValue('--gap'))  || 2;
+      // 横の左右パディング（カードの内側＋ページ余白の概算）
+      var horizontalPadding = 24; // だいたい左右12pxずつ
+      var boardUsable = vw - horizontalPadding - axis*2 - gap*7; // 8セル分の合計幅
+      var cellByWidth = Math.floor(boardUsable / 8);
+
+      // スマホでの過大サイズを抑制：最終サイズは「高さ基準」と「幅基準」の小さい方」
+      var cell = Math.max(30, Math.min(56, Math.min(cellByHeight, cellByWidth)));
+
+      document.documentElement.style.setProperty('--cell', cell + 'px');
+    }catch(e){
+      // 失敗時は元のロジックにフォールバック
+      try{ orig(); }catch(_) {}
+    }
+  };
+
+  // 初回・リサイズで適用
+  window.addEventListener('resize', window.fitBoardToViewport);
+  // DOM 準備後に一度実行（既存initでも呼ばれるが念のため）
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', window.fitBoardToViewport, { once:true });
+  } else {
+    window.fitBoardToViewport();
+  }
+})();
+</script>
+
