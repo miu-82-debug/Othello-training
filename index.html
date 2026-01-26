@@ -291,19 +291,22 @@
 </style>
 
 
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0b1220">
+<!-- ===== PWA: manifest / theme color ===== -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Othello Trainer">
 
-  <style id="pwa-mobile-nav-patch">
-    /* Mobile-only ◀▶ buttons (right of 90°回転) */
-    .mobileInspectNav { display: none; }
-    @media (hover: none) and (pointer: coarse), (max-width: 680px) {
-      .mobileInspectNav { display: inline-flex; }
-      /* make the trio compact on small screens */
-      #rotate90Box button { padding: 8px 10px; }
-      #rotate90Box #inspectPrevBtn, #rotate90Box #inspectNextBtn { min-width: 44px; justify-content: center; }
-    }
-  </style>
+<style id="pwa-mobile-arrows">
+  /* Mobile-only arrow buttons next to "回転：0°" */
+  #mobileArrowWrap{ display:none; align-items:center; gap:6px; }
+  @media (max-width: 900px), (pointer: coarse){
+    #mobileArrowWrap{ display:inline-flex; }
+    #mobileArrowWrap button{ min-width:44px; min-height:36px; padding:8px 10px; font-size:16px; line-height:1; }
+  }
+</style>
+
 </head>
 <body>
 <div class="topbar">
@@ -3805,47 +3808,10 @@ body.theme-dark{
     if(!document.getElementById('rotate90Box')){
       const rotBox = el('span', { id:'rotate90Box', style:'display:none;align-items:center;gap:6px;' });
       const rotBtn = el('button', { class:'ghost', id:'rotate90Btn', text:'90°回転' });
-
-      // Mobile-only nav buttons (◀ / ▶) = same as ArrowLeft / ArrowRight
-      const navL = el('button', { class:'ghost mobileInspectNav', id:'inspectPrevBtn', text:'◀' });
-      const navR = el('button', { class:'ghost mobileInspectNav', id:'inspectNextBtn', text:'▶' });
-      navL.title = '←';
-      navR.title = '→';
-      navL.addEventListener('click', ()=>{
-        try{
-          window.dispatchEvent(new KeyboardEvent('keydown', { key:'ArrowLeft' }));
-        }catch(e){
-          try{
-            if(!training) return;
-            if(!inspectMode) enterInspect();
-            inspectIndex = Math.max(rangeStart-1, inspectIndex - 1);
-            setPositionByTokenIndex(inspectIndex);
-            renderBoard();
-            setStatus(`確認中：${inspectIndex+1}手目の局面（範囲 ${rangeStart}〜${rangeEnd}）`);
-          }catch(_){}
-        }
-      });
-      navR.addEventListener('click', ()=>{
-        try{
-          window.dispatchEvent(new KeyboardEvent('keydown', { key:'ArrowRight' }));
-        }catch(e){
-          try{
-            if(!training) return;
-            if(!inspectMode) enterInspect();
-            inspectIndex = Math.min(rangeEnd, inspectIndex + 1);
-            setPositionByTokenIndex(inspectIndex);
-            renderBoard();
-            setStatus(`確認中：${inspectIndex+1}手目の局面（範囲 ${rangeStart}〜${rangeEnd}）`);
-          }catch(_){}
-        }
-      });
-
       const rotInfo = el('span', { id:'rotate90Info', class:'small muted', text:' 回転：0°' });
       rotBox.appendChild(rotBtn);
-      rotBox.appendChild(navL);
-      rotBox.appendChild(navR);
       rotBox.appendChild(rotInfo);
-// bindRotateBtn() が確実に拾えるよう、いったん DOM に入れておく
+      // bindRotateBtn() が確実に拾えるよう、いったん DOM に入れておく
       document.body.appendChild(rotBox);
 
       const place = ()=>{
@@ -9716,15 +9682,90 @@ if(!window._v22_20251025_safe_ls){
 </script>
 
 
-<script>
-  // PWA: register Service Worker (requires https or localhost)
-  (function(){
-    if(!('serviceWorker' in navigator)) return;
-    window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js').catch(function(e){
-        console.warn('SW register failed:', e);
-      });
-    });
-  })();
+<script id="patch-mobile-arrows">
+/* Mobile: add ◀/▶ buttons to the right of "回転：0°" (rotate90Info) and map to ArrowLeft/ArrowRight */
+(function(){
+  function dispatchArrow(key){
+    try{
+      const ev = new KeyboardEvent('keydown', { key, code: key, bubbles: true, cancelable: true });
+      window.dispatchEvent(ev);
+      return;
+    }catch(_){}
+    // Fallback (in case KeyboardEvent is blocked): emulate the same logic as the ArrowLeft/ArrowRight handler
+    try{
+      if(!window.training) return;
+      if(key !== "ArrowLeft" && key !== "ArrowRight") return;
+      if(!window.inspectMode && typeof window.enterInspect === "function") window.enterInspect();
+      if(key === "ArrowLeft"){
+        window.inspectIndex = Math.max(window.rangeStart-1, window.inspectIndex - 1);
+      }else{
+        window.inspectIndex = Math.min(window.rangeEnd, window.inspectIndex + 1);
+      }
+      if(typeof window.setPositionByTokenIndex === "function") window.setPositionByTokenIndex(window.inspectIndex);
+      if(typeof window.renderBoard === "function") window.renderBoard();
+      if(typeof window.setStatus === "function") window.setStatus(`確認中：${window.inspectIndex+1}手目の局面（範囲 ${window.rangeStart}〜${window.rangeEnd}）`);
+    }catch(_){}
+  }
+
+  function ensure(){
+    const rotBox = document.getElementById('rotate90Box');
+    const rotInfo = document.getElementById('rotate90Info');
+    if(!rotBox || !rotInfo) return false;
+    if(document.getElementById('mobileArrowWrap')) return true;
+
+    const wrap = document.createElement('span');
+    wrap.id = 'mobileArrowWrap';
+
+    const prev = document.createElement('button');
+    prev.type = 'button';
+    prev.className = 'ghost';
+    prev.id = 'mobilePrevBtn';
+    prev.textContent = '◀';
+    prev.setAttribute('aria-label', '確認中で1手戻る（←）');
+    prev.addEventListener('click', ()=> dispatchArrow('ArrowLeft'));
+
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'ghost';
+    next.id = 'mobileNextBtn';
+    next.textContent = '▶';
+    next.setAttribute('aria-label', '確認中で1手進む（→）');
+    next.addEventListener('click', ()=> dispatchArrow('ArrowRight'));
+
+    wrap.appendChild(prev);
+    wrap.appendChild(next);
+
+    // Place to the right of "回転：0°"
+    if(typeof rotInfo.after === 'function'){
+      rotInfo.after(wrap);
+    }else{
+      rotBox.appendChild(wrap);
+    }
+    return true;
+  }
+
+  function tick(){
+    if(ensure()) return;
+    setTimeout(tick, 200);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', tick);
+  }else{
+    tick();
+  }
+})();
 </script>
+
+<script id="pwa-sw-register">
+/* PWA: register service worker */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(err){
+      console.warn('SW registration failed:', err);
+    });
+  });
+}
+</script>
+
 </body></html>
