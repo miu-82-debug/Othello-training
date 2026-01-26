@@ -1,37 +1,24 @@
 {
-  "name": "Othello Trainer",
-  "short_name": "Othello",
-  "description": "Othello/Reversi の盤面トレーナー（PWA対応）",
-  "start_url": "./?source=pwa",
+  "name": "オセロ暗記トレーナー",
+  "short_name": "オセロ暗記",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0b3d2e",
-  "theme_color": "#0b3d2e",
-  "id": "othello-trainer",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "description": "オセロの棋譜・局面暗記トレーニング（オフライン対応）",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22512%22%20height=%22512%22%20viewBox=%220%200%20512%20512%22%3E%20%3Crect%20width=%22512%22%20height=%22512%22%20rx=%2296%22%20fill=%22#0b1220%22/%3E%20%3Ccircle%20cx=%22200%22%20cy=%22220%22%20r=%2292%22%20fill=%22#ffffff%22/%3E%20%3Ccircle%20cx=%22324%22%20cy=%22308%22%20r=%2292%22%20fill=%22#111827%22/%3E%20%3Cpath%20d=%22M200%20128a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#ffffff%22/%3E%20%3Cpath%20d=%22M324%20216a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#111827%22/%3E%20%3C/svg%3E",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22512%22%20height=%22512%22%20viewBox=%220%200%20512%20512%22%3E%20%3Crect%20width=%22512%22%20height=%22512%22%20rx=%2296%22%20fill=%22#0b1220%22/%3E%20%3Ccircle%20cx=%22200%22%20cy=%22220%22%20r=%2292%22%20fill=%22#ffffff%22/%3E%20%3Ccircle%20cx=%22324%22%20cy=%22308%22%20r=%2292%22%20fill=%22#111827%22/%3E%20%3Cpath%20d=%22M200%20128a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#ffffff%22/%3E%20%3Cpath%20d=%22M324%20216a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#111827%22/%3E%20%3C/svg%3E",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/maskable-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "icons/maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
