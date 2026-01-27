@@ -108,7 +108,7 @@
   @keyframes fall { to { transform: translateY(380px) rotate(calc(var(--r) + 360deg)); opacity: 1; } }
 
   /* Modal for kifu list */
-  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 200; }
   .modal .window { width: min(1060px, 94vw); max-height: 88vh; background: #fff; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); display: grid; grid-template-rows: auto 1fr auto; }
   .modal header { padding: 10px 14px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .modal header h3 { margin: 0; font-size: 1.02rem; }
@@ -200,6 +200,9 @@
   @media (max-width: 720px){
     /* Make the modal truly usable on phones (full screen + stable layout) */
     .modal { align-items: stretch; justify-content: stretch; }
+    /* When the kifu list modal is open on phones, hide the top bar completely */
+    body.kifu-modal-open{ overflow: hidden; }
+    body.kifu-modal-open .topbar{ display: none !important; }
     .modal .window{
       width: 100vw;
       max-width: 100vw;
@@ -1581,6 +1584,7 @@ function openKifuModal(){
   const pk = currentPath();
   modalPathName.textContent = pk;
   kifuModal.style.display='flex';
+  document.body.classList.add('kifu-modal-open');
   try{
     if (typeof renameBigInput !== 'undefined' && renameBigInput) { renameBigInput.value = currentBig() || ""; }
     if (typeof renameSmallRow !== 'undefined' && renameSmallRow) {
@@ -1596,7 +1600,10 @@ function openKifuModal(){
   }catch(e){}
   renderKifuList();
 }
-function closeKifuModal(){ kifuModal.style.display='none'; }
+function closeKifuModal(){
+  kifuModal.style.display='none';
+  document.body.classList.remove('kifu-modal-open');
+}
 
 function renderKifuList(){
   const pk = currentPath();
