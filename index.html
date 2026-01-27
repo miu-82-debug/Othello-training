@@ -195,6 +195,60 @@
     .panel.rightDock { grid-template-columns: 1fr; }
     .rightDock .dockGrid { grid-template-columns: 1fr; }
   }
+
+  /* ===== Mobile optimization: KIFU list modal ===== */
+  @media (max-width: 720px){
+    /* Make the modal truly usable on phones (full screen + stable layout) */
+    .modal { align-items: stretch; justify-content: stretch; }
+    .modal .window{
+      width: 100vw;
+      max-width: 100vw;
+      height: 100dvh;
+      max-height: 100dvh;
+      border-radius: 0;
+    }
+    /* Header: grid so the title/close stay visible and controls flow naturally */
+    .modal header{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "title close"
+        "controls controls"
+        "rename rename";
+      align-items: start;
+      justify-content: initial;
+    }
+    .modal header h3{ grid-area: title; }
+    .modal header .klist-controls{ grid-area: controls; width: 100%; }
+    .modal header .rename-controls{ grid-area: rename; width: 100%; }
+    #closeModalBtn{ grid-area: close; justify-self: end; align-self: start; }
+
+    /* iOS Safari: prevent input-focus zoom + improve tap targets */
+    #kifuModal input, #kifuModal select, #kifuModal textarea, #kifuModal button{ font-size: 16px; }
+
+    /* Controls row: allow compact wrapping without minimum widths breaking the layout */
+    #kifuModal #searchInput{ min-width: 0 !important; width: auto; flex: 1 1 240px; }
+    #kifuModal .klist-controls select{ width: auto; flex: 0 1 auto; }
+    #kifuModal .klist-controls button{ width: auto; flex: 0 0 auto; }
+    #kifuModal .klist-controls label{ white-space: nowrap; }
+
+    /* Scroll behavior inside modal */
+    .modal .body{ -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
+    /* List rows: stack to avoid horizontal overflow */
+    .klist-row{
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 10px 0;
+    }
+    .kindex{ width: auto; text-align: left; padding-top: 0; }
+    .kifu-wrap{ grid-template-columns: 1fr; gap: 6px; align-items: start; }
+    .kifu-wrap .label{ text-align: left; }
+    .kifu-btns{ flex-wrap: wrap; justify-content: flex-start; }
+
+    /* Row buttons: full width for easy tapping */
+    .klist-row > button{ width: 100%; padding: 10px 12px; }
+  }
 </style>
 <!-- v21 Calendar readability upgrade -->
 <style id="v21-calendar-css">
