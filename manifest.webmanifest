@@ -1,22 +1,16 @@
 {
-  "name": "オセロ暗記トレーナー",
-  "short_name": "オセロ暗記",
+  "name": "Othello Trainer",
+  "short_name": "Othello",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0b1220",
-  "theme_color": "#0b1220",
-  "description": "オセロの棋譜・局面暗記トレーニング（オフライン対応）",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "description": "オセロ（リバーシ）トレーニング用PWA",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22512%22%20height=%22512%22%20viewBox=%220%200%20512%20512%22%3E%20%3Crect%20width=%22512%22%20height=%22512%22%20rx=%2296%22%20fill=%22#0b1220%22/%3E%20%3Ccircle%20cx=%22200%22%20cy=%22220%22%20r=%2292%22%20fill=%22#ffffff%22/%3E%20%3Ccircle%20cx=%22324%22%20cy=%22308%22%20r=%2292%22%20fill=%22#111827%22/%3E%20%3Cpath%20d=%22M200%20128a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#ffffff%22/%3E%20%3Cpath%20d=%22M324%20216a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#111827%22/%3E%20%3C/svg%3E",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22512%22%20height=%22512%22%20viewBox=%220%200%20512%20512%22%3E%20%3Crect%20width=%22512%22%20height=%22512%22%20rx=%2296%22%20fill=%22#0b1220%22/%3E%20%3Ccircle%20cx=%22200%22%20cy=%22220%22%20r=%2292%22%20fill=%22#ffffff%22/%3E%20%3Ccircle%20cx=%22324%22%20cy=%22308%22%20r=%2292%22%20fill=%22#111827%22/%3E%20%3Cpath%20d=%22M200%20128a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#ffffff%22/%3E%20%3Cpath%20d=%22M324%20216a92%2092%200%200%201%2092%2092c0%2051-41%2092-92%2092s-92-41-92-92%2041-92%2092-92z%22%20fill=%22#111827%22/%3E%20%3C/svg%3E",
-      "sizes": "512x512",
+      "src": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20512%20512%22%3E%0A%3Crect%20width%3D%22512%22%20height%3D%22512%22%20rx%3D%2296%22%20fill%3D%22%230b1020%22/%3E%0A%3Ccircle%20cx%3D%22196%22%20cy%3D%22256%22%20r%3D%2292%22%20fill%3D%22%23ffffff%22/%3E%0A%3Ccircle%20cx%3D%22316%22%20cy%3D%22256%22%20r%3D%2292%22%20fill%3D%22%23111827%22/%3E%0A%3Ctext%20x%3D%22256%22%20y%3D%22430%22%20font-size%3D%2292%22%20text-anchor%3D%22middle%22%20fill%3D%22%23ffffff%22%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Helvetica%2C%20Arial%22%3EOT%3C/text%3E%0A%3C/svg%3E",
+      "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
