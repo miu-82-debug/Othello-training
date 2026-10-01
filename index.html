@@ -5295,13 +5295,13 @@ const key = (turnNum != null) ? ('turn:' + String(turnNum)) : null;
       try{
         const pk = currentPath();
         const arr = store.kifuByPath[pk] || [];
-        const header = ['id','name','len','enabled','attempts','solved','mistakes','best_ms','avg_ms','tags'];
+        const header = ['id','name','len','enabled','attempts','solved','mistakes','best_ms','avg_ms','tags','moves'];
         const lines = [header.join(',')];
         arr.forEach(k=>{
           const tm = k.stats?.time || {};
           const cols = [
             k.id,
-            ((k.moves||[]).join('')).replace(/"/g,'""'),
+            k.name || '',
             (k.moves||[]).length,
             (k.enabled!==false)?1:0,
             k.stats?.attempts||0,
@@ -5309,9 +5309,10 @@ const key = (turnNum != null) ? ('turn:' + String(turnNum)) : null;
             k.stats?.mistakes||0,
             (typeof tm.bestMs==='number'?tm.bestMs:''),
             (typeof tm.avgMs==='number'?Math.round(tm.avgMs):''),
-            (k.tags||[]).join('|').replace(/"/g,'""')
+            (k.tags||[]).join('|'),
+            (k.moves||[]).join('')
           ];
-          lines.push(cols.map(x => '"' + String(x) + '"').join(','));
+          lines.push(cols.map(x => '"' + String(x ?? '').replace(/"/g,'""') + '"').join(','));
         });
         const csv = lines.join('\n');
         const blob = new Blob([csv], {type:'text/csv'});
@@ -7840,27 +7841,6 @@ RT.registerAction = function(id, handler){
     btn.addEventListener('click', (ev)=>handler(ev));
   }
 };
-
-/** Example: centralize exportStats action if button exists */
-RT.registerAction('exportStatsBtn', function(){
-  const pk = RT.store.currentPath(); if(!pk) return;
-  const arr = RT.store.listAt(pk);
-  const toCsv = (rows)=> rows.map(r=> r.map(x=>'"'+String(x).replaceAll('"','""')+'"').join(',')).join('\\n');
-  const header = ['id','name','len','enabled','attempts','solved','mistakes','best_ms','avg_ms','tags'];
-  const rows = [header];
-  arr.forEach(k=>{
-    const tm = k.stats?.time || {};
-    rows.push([
-      k.id, k.name||'', (k.moves||[]).length, (k.enabled!==false)?1:0,
-      k.stats?.attempts||0, k.stats?.solved||0, k.stats?.mistakes||0,
-      (typeof tm.bestMs==='number'?tm.bestMs:''), (typeof tm.avgMs==='number'?Math.round(tm.avgMs):''), (k.tags||[]).join('|')
-    ]);
-  });
-  const blob = new Blob([toCsv(rows)], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download=(pk.replaceAll('/','__')||'folder')+'_stats.csv';
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1200);
-});
 
 /** Finalize */
 onReady(()=> RT.bumpTitle('v31.2') );
